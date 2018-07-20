@@ -6,6 +6,7 @@
 ### load packages
 library(FLfse)
 library(ggplotFL)
+library(FLAssess)
 
 ### select R scripts from functions folder
 load_files <- list.files("functions/")
@@ -72,8 +73,8 @@ units(stk)[1:17] <- as.list(c(rep(c("tonnes", "thousands", "kg"), 4),
 ### special case for NS cod
 ### catch & catch weights until 2017,
 ### maturity, stock weights, stock & F etc until 2018
-stk_stf2017 <- FLasher::stf(window(stk, end = 2017), n_years - 1)
-stk_stf2018 <- FLasher::stf(window(stk, end = 2018), n_years)
+stk_stf2017 <- stf(window(stk, end = 2017), n_years - 1)
+stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### 
 stk_stf <- stk_stf2018
 ### last 2 data years for catch weights
@@ -168,19 +169,33 @@ idx <- calc_survey(stk = stk_stf, idx = idx)
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
 ### ------------------------------------------------------------------------ ###
+# 
+# stk_tmp <- window(stk_stf, end = 2018)
+# catch.wt(stk_tmp)[,ac(2018)] <- landings.wt(stk_tmp)[,ac(2018)] <-
+#   discards.wt(stk_tmp)[,ac(2018)] <- NA
+# stk_tmp <- stk_tmp[,,,,, 1:10]
+# idx_tmp <- window(idx, end = 2018)
+# idx_tmp[[2]] <- window(idx_tmp[[2]], end = 2017)
+# idx_tmp <- lapply(idx_tmp, FLCore::iter, 1:10)
+# 
+# fit2 <- FLR_SAM(stk = stk_tmp, 
+#                idx = idx_tmp, conf = cod4_conf_sam)
+# stk2 <- SAM2FLStock(fit2)
+# plot(stk2)
+# plot(stk)
+# 
+# 
 
-stk_tmp <- window(stk_stf, end = 2018)
-catch.wt(stk_tmp)[,ac(2018)] <- landings.wt(stk_tmp)[,ac(2018)] <-
-  discards.wt(stk_tmp)[,ac(2018)] <- NA
-stk_tmp <- stk_tmp[,,,,, 1:10]
-idx_tmp <- window(idx, end = 2018)
-idx_tmp[[2]] <- window(idx_tmp[[2]], end = 2017)
-idx_tmp <- lapply(idx_tmp, FLCore::iter, 1:10)
-
-fit2 <- FLR_SAM(stk = stk_tmp, 
-               idx = idx_tmp, conf = cod4_conf_sam)
-stk2 <- SAM2FLStock(fit2)
-plot(stk2)
-plot(stk)
+### ------------------------------------------------------------------------ ###
+### save OM ####
+### ------------------------------------------------------------------------ ###
 
 
+### stock
+saveRDS(stk_stf, file = "input/cod4/stk.rds")
+### stock recruitment
+saveRDS(sr, file = "input/cod4/sr.rds")
+### recruitment residuals
+saveRDS(sr_res, file = "input/cod4/sr_res.rds")
+### surveys
+saveRDS(idx, file = "input/cod4/idx.rds")
