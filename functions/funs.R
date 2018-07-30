@@ -223,3 +223,83 @@ calc_survey_ind <- function(stk, idx,
   return(idx)
   
 }
+
+
+### ------------------------------------------------------------------------ ###
+### load OM in simulation ####
+### ------------------------------------------------------------------------ ###
+### load the OM based on scenario definition
+### warning: this function loads the object in the parent environment
+### of its function call
+### i.e. executing it load_OMs() loads the objects in the environment where it
+### is called so that they are available
+
+load_OMs <- function(ctrl.mp, path = "input/") {
+  ### name is path to input objects
+  name <- ctrl.mp$ctrl.om$name
+  ### load objects and assign name
+  for (object in names(ctrl.mp$ctrl.om)[-1]) {
+    assign(x = object, readRDS(paste0(path, name, "/", object, ".rds")),
+           envir = parent.env(environment()))
+    
+  }
+  ### number of iterations
+  assign(x = "it", value = dims(stk)$iter, envir = parent.env(environment()))
+  ### simulation definitions
+  for (object in names(ctrl.mp$ctrl.def)) {
+    assign(x = object, ctrl.mp$ctrl.def[[object]],
+           envir = parent.env(environment()))
+  }
+  
+}
+
+### ------------------------------------------------------------------------ ###
+### create ctrl list for passing to blocks of simulation ####
+### ------------------------------------------------------------------------ ###
+### warning: no checking of arguments
+create_ctrl <- function(ctrl.mp, name, ...) {
+  
+  ### create list with element name of ctrl.mp
+  ### and add all elements passed to function
+  res <- c(ctrl.mp[[name]], list(...))
+  
+}
+
+### ------------------------------------------------------------------------ ###
+### extract elements from list and load into current environment ####
+### ------------------------------------------------------------------------ ###
+### warning: this function loads the elements of the input list
+### into the parent environment of its function call, 
+### based on the names of the elements
+
+load_elements <- function(ctrl) {
+  ### extract
+  for (object in names(ctrl)) {
+    assign(x = object, ctrl[[object]],
+           envir = parent.env(environment()))
+    
+  }
+  
+}
+
+### ------------------------------------------------------------------------ ###
+### create fwdControl object ####
+### ------------------------------------------------------------------------ ###
+getCtrl <- function(values, quantity, years, it) {
+  
+  ### dimensions of ctrl object
+  dnms <- list(iter = 1:it, year = years, c("min", "val", "max"))
+  
+  ### create array with target values
+  arr0 <- array(NA, dimnames = dnms, dim = unlist(lapply(dnms, length)))
+  arr0[,, "val"] <- unlist(values)
+  arr0 <- aperm(arr0, c(2, 3, 1))
+  
+  ### create fwdControl object template
+  ctrl <- fwdControl(data.frame(year = years, quantity = quantity, val = NA))
+  
+  ### insert target values
+  ctrl@trgtArray <- arr0
+  
+  return(ctrl)
+}
