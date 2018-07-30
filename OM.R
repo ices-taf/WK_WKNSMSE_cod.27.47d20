@@ -14,12 +14,15 @@ load_files <- load_files[grepl(pattern = "*.R$", x = load_files)]
 ### source the scripts
 invisible(lapply(paste0("functions/", load_files), source))
 
+dir.create(path = "input/cod4", recursive = TRUE)
+dir.create(path = "output/runs", recursive = TRUE)
+
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations
-n <- 10
+n <- 50
 ### number of years
 n_years <- 30
 
@@ -50,7 +53,7 @@ stk <- propagate(stk, n + 1)
 dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
-set.seed(1)
+set.seed(2)
 uncertainty <- SAM_uncertainty(fit = fit, n = n)
 ### add noise to stock
 stock.n(stk) <- uncertainty$stock.n
@@ -77,7 +80,7 @@ stk_stf2017 <- stf(window(stk, end = 2017), n_years - 1)
 stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### 
 stk_stf <- stk_stf2018
-### last 2 data years for catch weights
+### last 3 data years for catch weights
 catch.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
   apply(catch.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
 landings.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
@@ -109,8 +112,32 @@ sr_res_new <- rnorm(n + 1,
 sr_res[, ac((yr_data + 1):(yr_data + n_years))] <- sr_res_new
 ### remove residuals from first (deterministic) iteration
 sr_res[, ac((yr_data + 1):(yr_data + n_years)),,,, 1] <- 0
+### exponentiate
+sr_res <- exp(sr_res)
 
 plot(sr_res)
+
+### ------------------------------------------------------------------------ ###
+### stf for 2018: assume catch advice is taken ####
+### ------------------------------------------------------------------------ ###
+c2018 <- 53058
+ctrl <- fwdControl(data.frame(year = 2018, quantity = "catch", 
+                              val = c2018))
+
+### project forward for intermediate year (2018)
+stk_int <- stk_stf
+stk_int[] <- fwd(stk_stf, ctrl = ctrl, sr = sr, sr.residuals = sr_res,
+                 sr.residuals.mult = TRUE, maxF = 5)[]
+
+### create stock for MSE simulation
+stk_fwd <- stk_stf
+### insert values for 2018
+stk_fwd[, ac(2018)] <- stk_int[, ac(2018)]
+### insert stock number for 2019 in order to calculate SSB at beginning of 
+### 2019
+stock.n(stk_fwd)[, ac(2019)] <- stock.n(stk_int)[, ac(2019)]
+
+#all.equal(window(stk_fwd, end = 2018), window(stk_stf, end = 2018))
 
 ### ------------------------------------------------------------------------ ###
 ### indices ####
@@ -163,8 +190,7 @@ names(idx) <- names(cod4_idx)
 idx <- FLIndices(idx)
 
 ### initialize index values
-idx <- calc_survey(stk = stk_stf, idx = idx)
-
+idx <- calc_survey(stk = stk_fwd, idx = idx)
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
@@ -187,15 +213,36 @@ idx <- calc_survey(stk = stk_stf, idx = idx)
 # 
 
 ### ------------------------------------------------------------------------ ###
+### remove fishy first iteration ####
+### ------------------------------------------------------------------------ ###
+### lengthy code in order to get iteration dimnames 1:n and not 2:n+1
+
+stk_fwd2 <- stk_fwd[,,,,, 1:n]
+stk_fwd2[] <- stk_fwd[,,,,, 2:(n + 1)]
+
+sr2 <- FLCore::iter(sr, 1:n)
+sr2[] <- FLCore::iter(sr, 2:(n + 1))
+
+sr_res2 <- FLCore::iter(sr_res, 1:n)
+sr_res2[] <- FLCore::iter(sr_res, 2:(n + 1))
+
+idx2 <- idx
+idx2[[1]] <- FLCore::iter(idx[[1]], 1:n)
+idx2[[1]][] <- FLCore::iter(idx[[1]], 2:(n + 1))
+idx2[[2]] <- FLCore::iter(idx[[2]], 1:n)
+idx2[[2]][] <- FLCore::iter(idx[[2]], 2:(n + 1))
+
+### ------------------------------------------------------------------------ ###
 ### save OM ####
 ### ------------------------------------------------------------------------ ###
 
 
 ### stock
-saveRDS(stk_stf, file = "input/cod4/stk.rds")
+saveRDS(stk_fwd2, file = "input/cod4/stk.rds")
 ### stock recruitment
-saveRDS(sr, file = "input/cod4/sr.rds")
+saveRDS(sr2, file = "input/cod4/sr.rds")
 ### recruitment residuals
-saveRDS(sr_res, file = "input/cod4/sr_res.rds")
+saveRDS(sr_res2, file = "input/cod4/sr_res.rds")
 ### surveys
-saveRDS(idx, file = "input/cod4/idx.rds")
+saveRDS(idx2, file = "input/cod4/idx.rds")
+
