@@ -30,7 +30,7 @@ ctrl.mp <- list(
                 fwd_yrs_lf_remove = -2:-1, ### remove years from landing fraction
                 fwd_splitLD = TRUE),
   ctrl.x = list(method = "x_ICES", Btrigger = 150000, Ftrgt = 0.31),
-  ctrl.h = list(method = "h_ICES"),
+  ctrl.h = list(method = "h_ICES", option = "A"),
   ctrl.k = list(method = "k_SAM_forecast",
                 fwd_trgt = c("fsq", "hcr"), ### what to target in forecast
                 fwd_yrs = 2, ### number of years to add

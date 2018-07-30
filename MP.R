@@ -44,6 +44,7 @@ if (length(args) > 0) {
 } else {
   n_parts <- 1 ### no split
   scns <- TRUE ### run all scenarios
+  cluster_type <- NULL 
 }
 
 ### ------------------------------------------------------------------------ ###

@@ -39,22 +39,64 @@ hFun <- function(...){
 ### ICES default HCR
 ### target Ftrgt
 ### if SSB < Btrigger, target reduced: Ftrgt * SSB/Btrigger
-h_ICES <- function(stk0, refpts, ay, it, tracking, ...) {
+h_ICES <- function(stk0, refpts, ay, it, tracking, 
+                   option = "A", ### WKNSMSE options
+                   ...) {
   
   ### target F
   ### reduce F if SSB below Btrigger
   
-  ### F target
-  Ftrgt <- refpts["Ftrgt"]
+  ### get reference values
+  Ftrgt <- propagate(FLPar(refpts["Ftrgt"]), it)
+  Btrigger <- propagate(FLPar(refpts["Btrigger"]), it)
+  if ("Blim" %in% dimnames(refpts)$params) {
+    Blim <- propagate(FLPar(refpts["Blim"]), it)
+  } else {
+    Blim <- propagate(FLPar(0), it)
+  } 
   
   ### SSB status (last year only) relative to Btrigger
-  status <- tail(ssb(stk0)) / refpts["Btrigger"]
+  status_Btrigger <- tail(ssb(stk0)) / Btrigger 
+  ### SSB status (last year only) relative to Blim
+  status_Blim <- tail(ssb(stk0)) / Blim
   
-  ### keep only values <1
-  status <- ifelse(status < 1, status, 1)
+  ### positions (iterations) where SSB is below Btrigger
+  pos_Btrigger <- which(status_Btrigger < 1)
+  ### below Blim
+  pos_Blim <- which(status_Blim < 1)
   
-  ### new F target: Ftrgt reduced if SSB below Btrigger
-  Ftrgt <- Ftrgt * status
+  ### default ICES HCR (option A):
+  ### if SSB<Btrigger => F = Ftrgt * SSB/Btrigger
+  if (option == "A") {
+    mult <- ifelse(status_Btrigger < 1, status_Btrigger, 1)
+    
+  } else if (option == "B") {
+  ### option B:
+  ### if SSB<Btrigger => F = Ftrgt * SSB/Btrigger
+  ### if SSB<Blim => F = Ftrgt * 0.25
+    ### SSB < Btrigger
+    mult <- ifelse(status_Btrigger < 1, status_Btrigger, 1)
+    ### set to 0.25 if SSB < Blim
+    mult[,,,,, pos_Blim] <- 0.25
+    
+  } else if (option == "C") {
+  ### option C:
+  ### if SSB<Btrigger => F = Ftrgt * SSB/Btrigger
+  ### if SSB<Blim => F = max(Ftrgt * 0.25, Ftrgt * SSB/Btrigger)
+    ### SSB < Btrigger
+    mult <- ifelse(status_Btrigger < 1, status_Btrigger, 1)
+    ### if SSB < Blim, use maximum of SSB/Btrigger or 0.25
+    ### i.e. limit ratio to 0.25
+    mult[,,,,, pos_Blim] <- c(ifelse(mult[,,,,, pos_Blim] < 0.25, 0.25, 
+                                     mult[,,,,, pos_Blim]))
+    
+  } else {
+  ### unknown options
+    mult <- 1
+  }
+  
+  ### new target
+  Ftrgt <- Ftrgt * mult
   
   ### create ctrl object
   ctrl <- getCtrl(values = Ftrgt, quantity = "f", years = ay + 1, it = it)
