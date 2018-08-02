@@ -43,13 +43,14 @@ SAM_wrapper <- function(stk0, idx0, ay, forecast = FALSE,
                         fwd_yrs_lf_remove = -2:-1,
                         fwd_splitLD = TRUE,
                         parallel = FALSE,
+                        newtonsteps = 3, 
                         ...){
   
   args <- list(...)
   
   ### fit SAM to provided data
   fit <- FLR_SAM(stk = stk0, idx = idx0, conf = args$conf, 
-                 DoParallel = parallel)
+                 DoParallel = parallel, newtonsteps = newtonsteps)
   
   ### convert into FLStock
   stk0 <- SAM2FLStock(object = fit, stk = stk0) 
