@@ -39,13 +39,56 @@ is(fit)
 fit
 
 ### ------------------------------------------------------------------------ ###
+### remove catch multiplier for cod ####
+### ------------------------------------------------------------------------ ###
+
+### get catch multiplier
+ages <- fit$conf$minAge:fit$conf$maxAge
+yrs <- fit$conf$keyScaledYears
+catch_mult <- FLQuant(
+  matrix(data = fit$pl$logScale[(fit$conf$keyParScaledYA + 1)], 
+       ncol = fit$conf$noScaledYears,
+       nrow = length(fit$conf$minAge:fit$conf$maxAge),
+       byrow = TRUE), 
+       dimnames = list(year = fit$conf$keyScaledYears, 
+                       age = fit$conf$minAge:fit$conf$maxAge))
+catch_mult <- exp(catch_mult)
+
+cod4_stk2 <- cod4_stk
+### correct catch.n
+catch.n(cod4_stk2)[ac(ages), ac(yrs)] <- catch.n(cod4_stk2)[ac(ages), ac(yrs)] *
+  catch_mult
+### split into landings and discards, based on landing fraction
+landings.n(cod4_stk2)[ac(ages), ac(yrs)] <- catch.n(cod4_stk2)[ac(ages), ac(yrs)] *
+  (landings.n(cod4_stk)[ac(ages), ac(yrs)] / catch.n(cod4_stk)[ac(ages), ac(yrs)])
+discards.n(cod4_stk2)[ac(ages), ac(yrs)] <- catch.n(cod4_stk2)[ac(ages), ac(yrs)] *
+  (1 - landings.n(cod4_stk)[ac(ages), ac(yrs)] / 
+     catch.n(cod4_stk)[ac(ages), ac(yrs)])
+### update stock
+catch(cod4_stk2)[, ac(yrs)] <- computeCatch(cod4_stk2)[, ac(yrs)]
+landings(cod4_stk2)[, ac(yrs)] <- computeLandings(cod4_stk2)[, ac(yrs)]
+discards(cod4_stk2)[, ac(yrs)] <- computeDiscards(cod4_stk2)[, ac(yrs)]
+
+### fit SAM
+fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
+                conf = cod4_conf_sam[!names(cod4_conf_sam) %in% 
+                                       c("noScaledYears", "keyScaledYears",
+                                         "keyParScaledYA")])
+### compare results
+summary(fit2) / summary(fit)
+### estimates and log likelihood identical, only bounds smaller
+
+### ------------------------------------------------------------------------ ###
 ### create FLStock ####
 ### ------------------------------------------------------------------------ ###
 ### the stock contains n+1 iterations
 ### the first one is the estimate from SAM, the remaining ones are resampled
 
-### creat template with 1 iteration
-stk <- SAM2FLStock(object = fit)
+### create template with 1 iteration
+### cod4_stk2 is used as template, i.e. the input values (catch) include
+### the catch multiplier, 
+### the results (stock numbers & harvest) are used from the real WGNSSk fit
+stk <- SAM2FLStock(object = fit, stk = cod4_stk2)
 summary(stk)
 
 ### add iteration dimension

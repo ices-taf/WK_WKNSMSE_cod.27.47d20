@@ -108,7 +108,7 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
   invisible(lapply(paste0("functions/", load_files), source))
 
 # part <- 1
-# scn <- 1
+# scn <- 2
 
   
   ### set seed depending on part of scenario

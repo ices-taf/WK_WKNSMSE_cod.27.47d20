@@ -5,9 +5,9 @@
 ### each element in the list defines a particular scenario
 
 ### a dummy template for NS cod
-ctrl.mp <- list(
+ctrl.mp1 <- list(
   ### definition of operating model
-  ctrl.om = list(name = "cod4", stk = "stk", sr = "sr", sr_res = "sr_res",
+  ctrl.om = list(name = "cod4_non_mult", stk = "stk", sr = "sr", sr_res = "sr_res",
                  idx = "idx"),
   ### simulation specifications
   ctrl.def = list(
@@ -42,6 +42,15 @@ ctrl.mp <- list(
   ctrl.w = list(method = "TAC_constraint", upper = Inf, lower = -Inf)
 )
 
+### without catch multiplier
+ctrl.mp2 <- ctrl.mp1
+ctrl.mp2$ctrl.om$name <- "cod4"
+ctrl.mp2$ctrl.f$conf <- cod4_conf_sam[!names(cod4_conf_sam) %in% 
+                                        c("noScaledYears", "keyScaledYears",
+                                          "keyParScaledYA")]
+ctrl.mp2$ctrl.f$newtonsteps <- 0
+
 ctrl.mps <- list(
-  test = ctrl.mp
+  no_mult = ctrl.mp1,
+  cod4 = ctrl.mp2
 )
