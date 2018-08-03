@@ -21,7 +21,7 @@ ctrl.mp1 <- list(
   ctrl.oem = list(method = "o_WKNSMSE", idx_timing = c(0, -1),
                   catch_timing = -1),
   ctrl.f = list(method = "SAM_wrapper", conf = cod4_conf_sam,
-                forecast = FALSE, ### do a forecast, .e.g. to get SSB 
+                forecast = TRUE, ### do a forecast, .e.g. to get SSB 
                 fwd_trgt = "fsq", ### what to target in forecast
                 fwd_yrs = 1, ### number of years to add
                 fwd_yrs_average = -3:0, ### years used for averages
