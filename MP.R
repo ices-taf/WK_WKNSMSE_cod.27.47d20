@@ -72,7 +72,7 @@ if (cluster_type == 1) {
 ### ------------------------------------------------------------------------ ###
 ### libraries ####
 ### ------------------------------------------------------------------------ ###
-required_pckgs <- c("FLash", "FLife", "stockassessment", "FLfse", "foreach")
+required_pckgs <- c("FLash", "stockassessment", "FLfse", "foreach")
 ### save as object in order to avoid output to screen
 . <- lapply(required_pckgs, function(x){
   suppressMessages(library(x, character.only = TRUE))
@@ -145,7 +145,7 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
   ### create object for tracking ####
   ### ---------------------------------------------------------------------- ###
   tracking <- FLQuant(NA,
-    dimnames = list(metric = c("Fperc", "convergence", "advice", 
+    dimnames = list(metric = c("MP.f", "MP.ssb", "convergence", "advice", 
                                "Implementation", "IEM", "FleetDyn",
                                "OM.f", "OM.ssb", "OM.catch"),
                     year = dimnames(catch(stk))$year,
@@ -161,10 +161,6 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
     
     gc()
     cat(ay, "> ")
-
-    tracking["OM.f", ac(ay - 1)] <- fbar(stk)[, ac(ay - 1)]
-    tracking["OM.ssb", ac(ay - 1)] <- ssb(stk)[, ac(ay - 1)]
-    tracking["OM.catch", ac(ay - 1)] <- catch(stk)[, ac(ay - 1)]
     
     ### -------------------------------------------------------------------- ###
     ### OEM ####
@@ -194,7 +190,7 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
                           tracking = tracking, ay = ay, parallel = TRUE)
     ### WARNING: parallel=TRUE only for local testing
     ### this is inefficient as only the assessment is parallelized
-    ### but the everything else runs sequentially
+    ### but everything else runs sequentially
     
     ### run assessment
     f.out <- do.call("fFun", ctrl.f)
@@ -282,6 +278,11 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
                  sr.residuals.mult = TRUE, maxF = 5)[]
     
     print(plot(stk))
+    
+    ### insert results into tracking object
+    tracking["OM.f", ac(ay + 1)] <- fbar(stk)[, ac(ay + 1)]
+    tracking["OM.ssb", ac(ay + 1)] <- ssb(stk)[, ac(ay + 1)]
+    tracking["OM.catch", ac(ay + 1)] <- catch(stk)[, ac(ay + 1)]
     
   } ### end of year loop
   cat("\n")
