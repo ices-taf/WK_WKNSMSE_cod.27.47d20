@@ -123,6 +123,7 @@ stk_stf2017 <- stf(window(stk, end = 2017), n_years - 1)
 stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### 
 stk_stf <- stk_stf2018
+### use only maturity from 2018 ### TO DO
 ### last 3 data years for catch weights
 catch.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
   apply(catch.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
