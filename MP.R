@@ -53,7 +53,7 @@ if (length(args) > 0) {
 ### needs to be load first, otherwise the MPI breaks down ...
 
 ### for local in-node/PC parallelization
-if (cluster_type == 1) {
+if (isTRUE(cluster_type == 1)) {
 
   library(doParallel)
   cl <- makeCluster(n_cores)
@@ -61,7 +61,7 @@ if (cluster_type == 1) {
   getDoParWorkers()
   getDoParName()
 
-} else if (cluster_type == 2) {
+} else if (isTRUE(cluster_type == 2)) {
 
   library(doMPI)
   cl <- startMPIcluster(count = n_cores) # one less than requested in the .job file
@@ -70,7 +70,7 @@ if (cluster_type == 1) {
 }
 
 ### ------------------------------------------------------------------------ ###
-### libraries ####
+### packages ####
 ### ------------------------------------------------------------------------ ###
 required_pckgs <- c("FLash", "stockassessment", "FLfse", "foreach")
 ### save as object in order to avoid output to screen
@@ -82,11 +82,9 @@ required_pckgs <- c("FLash", "stockassessment", "FLfse", "foreach")
 ### functions ####
 ### ------------------------------------------------------------------------ ###
 
-### select R scripts from functions folder
-load_files <- list.files("functions/")
-load_files <- load_files[grepl(pattern = "*.R$", x = load_files)]
-### source the scripts
-invisible(lapply(paste0("functions/", load_files), source))
+### source the scripts from functions folder
+invisible(lapply(list.files(path = "functions/", pattern = "*.R$", 
+                            full.names = TRUE), source))
 
 ### ------------------------------------------------------------------------ ###
 ### load scenario definitions ####
@@ -168,7 +166,7 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
     ### observations & observation error
     
     ### -------------------------------------------------------------------- ###
-    ### oFun() - observations
+    ### oFun - observations
     
     ### create list with parameters for o()
     ctrl.oem <- create_ctrl(ctrl.mp, name = "ctrl.oem", stk = stk, idx = idx, 
