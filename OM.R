@@ -123,7 +123,10 @@ stk_stf2017 <- stf(window(stk, end = 2017), n_years - 1)
 stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### 
 stk_stf <- stk_stf2018
-### use only maturity from 2018 ### TO DO
+### maturity data 2018 is already average of previous years
+### use this in projection
+mat(stk_stf)[, ac((2018 + 1):(2018 + n_years))] <- mat(stk_stf[, ac(2018)])
+
 ### last 3 data years for catch weights
 catch.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
   apply(catch.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
@@ -145,6 +148,18 @@ sr <- fmle(sr)
 
 plot(sr)
 plot(sr@fitted ~ sr@ssb)
+plot(sr@rec ~ sr@ssb)
+
+as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
+  mutate(age = NULL,
+         year = ifelse(qname == "SSB", year + 1, year)) %>%
+  spread(key = qname, value = data) %>%
+  ggplot() +
+  geom_point(aes(x = SSB, y = rec, group = iter), 
+             alpha = 0.5, colour = "grey", shape = 1) +
+  geom_line(aes(x = SSB, y = fitted, group = iter)) +
+  theme_bw()
+
 
 ### create residuals for projection
 set.seed(1)
@@ -236,6 +251,26 @@ idx <- FLIndices(idx)
 ### initialize index values
 idx <- calc_survey(stk = stk_fwd, idx = idx)
 
+
+### compare to original survey(s)
+as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
+                       cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
+                       sim_q1 = iter(index(idx$IBTS_Q1_gam), 1),
+                       sim_q3 = iter(index(idx$IBTS_Q3_gam), 1)
+                       )) %>%
+  mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
+        source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
+  filter(year <= 2019) %>%
+  ggplot(aes(x = year, y = data, colour = source)) +
+  geom_line() +
+  facet_grid(paste("age", age) ~ paste("IBTS", survey), scales = "free_y") +
+  # stat_summary(fun.y = quantile, fun.args = 0.25, geom = "line", 
+  #              alpha = 0.5) +
+  # stat_summary(fun.y = quantile, fun.args = 0.75, geom = "line", 
+  #              alpha = 0.5) +
+  # stat_summary(fun.y = median, geom = "line") +
+  theme_bw()
+
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
 ### ------------------------------------------------------------------------ ###
@@ -248,11 +283,10 @@ idx <- calc_survey(stk = stk_fwd, idx = idx)
 # idx_tmp[[2]] <- window(idx_tmp[[2]], end = 2017)
 # idx_tmp <- lapply(idx_tmp, FLCore::iter, 1:10)
 # 
-# fit2 <- FLR_SAM(stk = stk_tmp, 
+# fit3 <- FLR_SAM(stk = stk_tmp, 
 #                idx = idx_tmp, conf = cod4_conf_sam)
-# stk2 <- SAM2FLStock(fit2)
-# plot(stk2)
-# plot(stk)
+# stk3 <- SAM2FLStock(fit3)
+# plot(iter(FLStocks(cod4 = stk, sim = stk3), 1))
 # 
 # 
 
