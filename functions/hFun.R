@@ -56,9 +56,9 @@ h_ICES <- function(stk0, refpts, ay, it, tracking,
   } 
   
   ### SSB status (last year only) relative to Btrigger
-  status_Btrigger <- tail(ssb(stk0)) / Btrigger 
+  status_Btrigger <- tail(ssb(stk0), 1) / Btrigger 
   ### SSB status (last year only) relative to Blim
-  status_Blim <- tail(ssb(stk0)) / Blim
+  status_Blim <- tail(ssb(stk0), 1) / Blim
   
   ### positions (iterations) where SSB is below Btrigger
   pos_Btrigger <- which(status_Btrigger < 1)
