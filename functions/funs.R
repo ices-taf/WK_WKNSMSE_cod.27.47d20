@@ -169,7 +169,8 @@ setMethod(f = "calc_survey",
           definition = function(stk, idx, use_q = TRUE, use_time = TRUE) {
   
   ### apply function to every element of FLIndices
-  lapply(X = idx, FUN = calc_survey_ind, stk = stk, use_q = TRUE, use_time = TRUE)
+  lapply(X = idx, FUN = calc_survey_ind, stk = stk, use_q = use_q, 
+         use_time = use_time)
             
 })
 ### stk = FLStock, idx = FLIndex
@@ -178,7 +179,7 @@ setMethod(f = "calc_survey",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
           definition = function(stk, idx, use_q = TRUE, use_time = TRUE) {
             
-  calc_survey(stk = stk, idx = idx, use_q = TRUE, use_time = TRUE)
+  calc_survey_ind(stk = stk, idx = idx, use_q = use_q, use_time = use_time)
             
 })
 
