@@ -5,7 +5,7 @@
 
 
 
-SAM_uncertainty <- function(fit, n = 1000) {
+SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   if (!is(fit, "sam")) stop("fit has to be class \"sam\"")
   
@@ -29,8 +29,11 @@ SAM_uncertainty <- function(fit, n = 1000) {
   ##Resample estimated values to get N, F and q 
   
   ### calculate standard deviations of model parameters
-  sds <- TMB::sdreport(obj = fit$obj, par.fixed = fit$opt$par, 
-                       getJointPrecision = TRUE)
+  . <- capture.output(sds <- TMB::sdreport(obj = fit$obj, 
+                                           par.fixed = fit$opt$par,
+                                           getJointPrecision = TRUE))
+  if (isTRUE(print_screen)) cat(paste0(., sep = "\n"))
+  
   ### extract values for parameters
   est <- c(sds$par.fixed, sds$par.random)
   ### estimate covariance?
@@ -43,7 +46,8 @@ SAM_uncertainty <- function(fit, n = 1000) {
   ### contains, among others, logF, logN...
   
   ### combine SAM estimate and random samples
-  dat <- rbind(est, sim.states)
+  #dat <- rbind(est, sim.states)
+  dat <- sim.states
   
   ### ---------------------------------------------------------------------- ###
   ### stock ####
@@ -55,7 +59,7 @@ SAM_uncertainty <- function(fit, n = 1000) {
   years <- fit$data$years
   ### FLQuant template for stock
   stk_template <- FLQuant(dimnames = list(age = min_age:max_age, year = years,
-                                          iter = 1:(n + 1)))
+                                          iter = 1:n))
   
   ### numbers at age
   stock.n <- stk_template
@@ -87,7 +91,7 @@ SAM_uncertainty <- function(fit, n = 1000) {
     
     ### create FLQuant template
     tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
-                                   year = "all", iter = 1:(n + 1)))
+                                   year = "all", iter = 1:n))
     ### fill with catchability values
     tmp[] <- exp(t(dat[, colnames(dat) == "logFpar"][,survey_ages_idx[[x]]]))
     
@@ -102,7 +106,7 @@ SAM_uncertainty <- function(fit, n = 1000) {
   
   ### template
   catch_sd <- FLQuant(dimnames = list(age = dimnames(stock.n)$age, year = "all",
-                                      iter = 1:(n + 1)))
+                                      iter = 1:n))
   
   ### index for catch sd (some ages are linked)
   catch_sd_idx <- idxObs[1, ][idxObs[1, ] > -1] + 1
@@ -120,7 +124,7 @@ SAM_uncertainty <- function(fit, n = 1000) {
     
     ### create FLQuant template
     tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
-                                   year = "all", iter = 1:(n + 1)))
+                                   year = "all", iter = 1:n))
     ### index for sd (some ages are linked)
     idx <- idxObs[idx_surveys[x], ]
     idx <- idx[idx > -1] + 1

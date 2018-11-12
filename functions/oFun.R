@@ -34,12 +34,29 @@ oFun <- function(...){
 ### ------------------------------------------------------------------------ ###
 
 o_WKNSMSE <- function(stk, idx, ay, tracking, idx_timing = -1,
-                      catch_timing = -1, ...) {
+                      catch_timing = -1, catch_res = NULL, ...) {
   
-  ### assume catch is known without error for now
+  ### create observed stock
   stk0 <- stk
+
+  ### add uncertainty to catch
+  if (!is.null(catch_res)) {
+    
+    ### implement for catch at age
+    catch.n(stk0) <- catch.n(stk) * catch_res
+    
+    ### split catch into discards and landings, based on landing fraction
+    landings.n(stk0) <- catch.n(stk0) * (landings.n(stk) / catch.n(stk))
+    discards.n(stk0) <- catch.n(stk0) * (1 - landings.n(stk) / catch.n(stk))
+    
+    ### update total catch/discards/landings
+    catch(stk0) <- computeCatch(stk0)
+    landings(stk0) <- computeLandings(stk0)
+    discards(stk0) <- computeDiscards(stk0)
+    
+  }
   
-  ### cut of years
+  ### cut off years
   ### workaround for NS cod: survey until intermediate year, but catch stops
   ### 1 year earlier
   ### slots such as natural mortality, maturity need to be kept, otherwise

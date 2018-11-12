@@ -8,7 +8,7 @@
 ctrl.mp1 <- list(
   ### definition of operating model
   ctrl.om = list(name = "cod4_non_mult", stk = "stk", sr = "sr", sr_res = "sr_res",
-                 idx = "idx"),
+                 idx = "idx", catch_res = "catch_res"),
   ### simulation specifications
   ctrl.def = list(
     fy = 2048, # final year

@@ -169,7 +169,8 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
     ### oFun - observations
     
     ### create list with parameters for o()
-    ctrl.oem <- create_ctrl(ctrl.mp, name = "ctrl.oem", stk = stk, idx = idx, 
+    ctrl.oem <- create_ctrl(ctrl.mp, name = "ctrl.oem", stk = stk, idx = idx,
+                            catch_res = if (exists("catch_res")) catch_res,
                             ay = ay, tracking = tracking)
     ### call observation function
     o.out <- do.call("oFun", ctrl.oem)
