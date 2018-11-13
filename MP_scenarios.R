@@ -39,7 +39,9 @@ ctrl.mp1 <- list(
                 fwd_yrs_sel = -3:-1, ### selectivity years
                 fwd_yrs_lf_remove = -2:-1, ### remove years from landing fraction
                 fwd_splitLD = TRUE),
-  ctrl.w = list(method = "TAC_constraint", upper = Inf, lower = -Inf)
+  ctrl.w = list(method = "TAC_constraint", upper = Inf, lower = -Inf,
+                Btrigger_cond = TRUE ### apply only if SSB>=Btrigger
+                )
 )
 
 ### without catch multiplier

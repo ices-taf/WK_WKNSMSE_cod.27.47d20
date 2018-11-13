@@ -38,7 +38,9 @@ wFun <- function(...){
 }
 
 
-TAC_constraint <- function(ctrl, tracking, ay, upper = Inf, lower = -Inf,
+TAC_constraint <- function(stk0, refpts, ctrl, tracking, ay, 
+                           upper = Inf, lower = -Inf,
+                           Btrigger_cond, ### apply only if SSB>=Btrigger?
                            ...) {
   
   ### check if catch targeted
@@ -64,7 +66,19 @@ TAC_constraint <- function(ctrl, tracking, ay, upper = Inf, lower = -Inf,
   ### find positions which exceed limits
   pos <- which(changes_new != change)
   
-  ### modify them
+  ### conditional constraint based on SSB>=Btrigger?
+  if (!is.null(Btrigger_cond)) {
+    
+    ### iterations where SSB is at or above Btrigger at start of TAC year
+    pos_Btrigger <- which(ssb(stk0)[, ac(ay + 1)] >= c(refpts["Btrigger"]))
+    ### only apply TAC constraint if both
+    ### - TAC change exceeds limit
+    ### - stock at or above Btrigger
+    pos <- intersect(pos, pos_Btrigger)
+    
+  }
+  
+  ### modify advice
   catch_target[pos] <- catch_prev[pos] * changes_new[pos]/100
   
   ### save new targets

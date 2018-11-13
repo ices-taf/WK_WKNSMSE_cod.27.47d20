@@ -234,8 +234,9 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
     ### wFun: Technical measures
     
     ### create list with parameters
-    ctrl.w <- create_ctrl(ctrl.mp = ctrl.mp, name = "ctrl.w", 
-                          ay = ay, tracking = tracking, ctrl = ctrl)
+    ctrl.w <- create_ctrl(ctrl.mp = ctrl.mp, name = "ctrl.w", refpts = refpts, 
+                          stk0 = stk0, ay = ay, tracking = tracking, 
+                          ctrl = ctrl)
     ### apply measures
     w.out <- do.call("wFun", ctrl.w)
     ### extract (ctrl & tracking)
