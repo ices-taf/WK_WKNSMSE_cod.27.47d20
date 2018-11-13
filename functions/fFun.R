@@ -80,6 +80,12 @@ SAM_wrapper <- function(stk0, idx0, ay, forecast = FALSE,
     ### forecast years
     yrs <- seq(to = dims(stk0)$maxyear, length.out = fwd_yrs)
     
+    ### coerce fit into list if only 1 iteration
+    if (is(fit, "sam")) {
+      fit <- list(fit)
+      class(fit) <- "sam_list"
+    }
+    
     ### do forecast for all iterations
     fc <- lapply(fit, function(fit_i) {
       
