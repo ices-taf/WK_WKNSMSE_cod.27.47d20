@@ -1,6 +1,6 @@
-### ------------------------------------------------------------------------ ###
+
+```{r }
 ### create FLStock for cod ####
-### ------------------------------------------------------------------------ ###
 ### base on SAM assessment
 
 ### load packages
@@ -18,9 +18,7 @@ invisible(lapply(list.files(path = "functions/", pattern = "*.R$",
 dir.create(path = "input/cod4", recursive = TRUE)
 dir.create(path = "output/runs", recursive = TRUE)
 
-### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
-### ------------------------------------------------------------------------ ###
 
 ### number of iterations
 n <- 100
@@ -31,9 +29,7 @@ n_years <- 30
 yr_data <- 2018
 
 
-### ------------------------------------------------------------------------ ###
 ### fit SAM ####
-### ------------------------------------------------------------------------ ###
 ### use input data provided in FLfse
 ### recreates the WGNSSK2018 cod assessment
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
@@ -42,9 +38,7 @@ is(fit)
 fit
 plot(fit)
 
-### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
-### ------------------------------------------------------------------------ ###
 ### For the cod SAM assessment a catch multiplier is estimated for the years
 ### 1993-2005.
 ### For the simulation, we correct the catch with this multiplier and remove
@@ -87,9 +81,7 @@ fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx,
 summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
-### ------------------------------------------------------------------------ ###
 ### create FLStock ####
-### ------------------------------------------------------------------------ ###
 ### create template with 1 iteration
 ### cod4_stk2 is used as template, i.e. the input values (catch) include
 ### the catch multiplier, 
@@ -105,9 +97,7 @@ plot(stk)
 ### save for later comparison
 stk_orig <- stk
 
-### ------------------------------------------------------------------------ ###
 ### add uncertainty ####
-### ------------------------------------------------------------------------ ###
 ### first approach: use variance-covariance
 
 
@@ -129,9 +119,7 @@ harvest(stk)[] <- uncertainty$harvest
 
 plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
-### ------------------------------------------------------------------------ ###
 ### check MCMC approach ####
-### ------------------------------------------------------------------------ ###
 library(tmbstan) # cran package
 
 ### create template stock for storing results
@@ -212,9 +200,7 @@ plot(FLStocks(MCMC = stk_MCMC, original = stk_orig))
 ### compare with first uncertainty approach
 plot(FLStocks(MCMC = stk_MCMC, original = stk_orig, Cov = stk))
 
-### ------------------------------------------------------------------------ ###
 ### try SAM internal "simstudy" ####
-### ------------------------------------------------------------------------ ###
 ### "Simulate data from fitted model and re-estimate from each run"
 
 set.seed(0)
@@ -225,9 +211,7 @@ stk_sim <- SAM2FLStock(object = fits, stk = cod4_stk2)
 plot(FLStocks(Cov = stk, simstudy = stk_sim,
               original = stk_orig))
 
-### ------------------------------------------------------------------------ ###
 ### extend stock for MSE simulation ####
-### ------------------------------------------------------------------------ ###
 
 ### special case for NS cod
 ### catch & catch weights until 2017,
@@ -250,9 +234,7 @@ discards.wt(stk_stf)[, ac(2018:(2018 + n_years))] <-
 
 plot(stk_stf)
 
-### ------------------------------------------------------------------------ ###
 ### stock recruitment ####
-### ------------------------------------------------------------------------ ###
 
 ### create stock recruitment model: segmented regression (hockey-stick)
 sr <- as.FLSR(stk, model = "segreg")
@@ -286,9 +268,7 @@ sr_res <- exp(sr_res)
 
 plot(sr_res)
 
-### ------------------------------------------------------------------------ ###
 ### stf for 2018: assume catch advice is taken ####
-### ------------------------------------------------------------------------ ###
 c2018 <- 53058
 ctrl <- fwdControl(data.frame(year = 2018, quantity = "catch", 
                               val = c2018))
@@ -308,9 +288,7 @@ stock.n(stk_fwd)[, ac(2019)] <- stock.n(stk_int)[, ac(2019)]
 
 #all.equal(window(stk_fwd, end = 2018), window(stk_stf, end = 2018))
 
-### ------------------------------------------------------------------------ ###
 ### indices ####
-### ------------------------------------------------------------------------ ###
 ### use real FLIndices object as template (included in FLfse)
 idx <- cod4_idx
 ### extend for simulation period
@@ -380,9 +358,7 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
   stat_summary(fun.y = median, geom = "line") +
   theme_bw()
 
-### ------------------------------------------------------------------------ ###
 ### catch noise ####
-### ------------------------------------------------------------------------ ###
 
 ### create noise for catch
 set.seed(2)
@@ -393,9 +369,7 @@ catch_res <- exp(catch_res)
 plot(catch_res)
 
 
-### ------------------------------------------------------------------------ ###
 ### check SAM ####
-### ------------------------------------------------------------------------ ###
 # 
 # stk_tmp <- window(stk_stf, end = 2018)
 # catch.wt(stk_tmp)[,ac(2018)] <- landings.wt(stk_tmp)[,ac(2018)] <-
@@ -412,9 +386,7 @@ plot(catch_res)
 # 
 # 
 
-### ------------------------------------------------------------------------ ###
 ### remove fishy first iteration ####
-### ------------------------------------------------------------------------ ###
 ### lengthy code in order to get iteration dimnames 1:n and not 2:n+1
 
 # stk_fwd2 <- stk_fwd[,,,,, 1:n]
@@ -432,9 +404,7 @@ plot(catch_res)
 # idx2[[2]] <- FLCore::iter(idx[[2]], 1:n)
 # idx2[[2]][] <- FLCore::iter(idx[[2]], 2:(n + 1))
 
-### ------------------------------------------------------------------------ ###
 ### save OM ####
-### ------------------------------------------------------------------------ ###
 
 
 ### stock
@@ -449,3 +419,5 @@ saveRDS(idx, file = "input/cod4/idx.rds")
 saveRDS(catch_res, file = "input/cod4/catch_res.rds")
 
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
+```
+
