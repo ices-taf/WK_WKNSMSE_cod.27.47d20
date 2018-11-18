@@ -132,10 +132,11 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
     it <- it/n_parts
     
     ### subset OM to iterations for current part
-    stk <- FLCore::iter(stk, it_part)
     idx <- lapply(idx, FLCore::iter, iter = it_part)
-    sr <- FLCore::iter(sr, it_part)
-    sr_res <- FLCore::iter(sr_res, it_part)
+    for (obj in c(setdiff(names(ctrl.mp$ctrl.om), c("idx", "name")))) {
+      assign(x = obj, 
+             value = FLCore::iter(get(obj), it_part))
+    }
 
   }
   
@@ -143,11 +144,10 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
   ### create object for tracking ####
   ### ---------------------------------------------------------------------- ###
   tracking <- FLQuant(NA,
-    dimnames = list(metric = c("MP.f", "MP.ssb", "convergence", "advice", 
+    dimnames = list(metric = c("MP.f", "MP.ssb", "convergence", "advice",
                                "Implementation", "IEM", "FleetDyn",
                                "OM.f", "OM.ssb", "OM.catch"),
-                    year = dimnames(catch(stk))$year,
-                    iter = 1:it))
+                    year = dimnames(catch(stk))$year, iter = 1:it))
   ### start tracking
   tracking["Implementation", ac(iy)] <- catch(stk)[, ac(iy)]
   
