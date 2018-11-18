@@ -105,8 +105,9 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
   ### load external functions
   invisible(lapply(paste0("functions/", load_files), source))
 
-# part <- 1
-# scn <- 2
+# n_parts <- 10
+# part <- 2
+# scn <- 3
 
   
   ### set seed depending on part of scenario
@@ -156,6 +157,7 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
   ### ---------------------------------------------------------------------- ###
   for (ay in an(vy[-length(vy)])) {
   #ay = an(vy[1])
+  # ay = ay + 1
     
     gc()
     cat(ay, "> ")

@@ -52,7 +52,15 @@ ctrl.mp2$ctrl.f$conf <- cod4_conf_sam[!names(cod4_conf_sam) %in%
                                           "keyParScaledYA")]
 ctrl.mp2$ctrl.f$newtonsteps <- 0
 
+
+### faster run
+ctrl.mp3 <- ctrl.mp2
+ctrl.mp3$ctrl.f$newtonsteps <- 0
+ctrl.mp3$ctrl.f$rel.tol <- 0.001
+
+### combine
 ctrl.mps <- list(
   no_mult = ctrl.mp1,
-  cod4 = ctrl.mp2
+  cod4 = ctrl.mp2,
+  cod4fast = ctrl.mp3
 )
