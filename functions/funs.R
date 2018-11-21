@@ -10,8 +10,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   if (!is(fit, "sam")) stop("fit has to be class \"sam\"")
   
   ### index for fishing mortality ages
-  idxF <- fit$conf$keyLogFsta[1, ] + dim(stk)[1] + 1
-  idxF <- idxF[idxF != 0] ### remove 0s
+  idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
+  #idxF <- idxF[idxF != 0] ### remove 0s
   
   ### index for F variances (usually some ages are bound)
   idxNVar <- fit$conf$keyVarLogN 
@@ -67,7 +67,10 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   ### F at age
   harvest <- stk_template
-  harvest[] <- exp(t(dat[, colnames(dat) == "logF"]))
+  ### insert values for estimated ages
+  harvest[unique(idxF)] <- exp(t(dat[, colnames(dat) == "logF"]))
+  ### duplicate ages, if some of them are bound
+  harvest[] <- harvest[idxF]
   
   ### ---------------------------------------------------------------------- ###
   ### surveys ####
@@ -81,7 +84,12 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
         fit$data$maxAgePerFleet[idx_surveys][x])
   })
   ### index for estimated parameters
-  sum(colnames(dat) == "logFpar") ### there are 9 parameters
+  idx_LogFpar <- lapply(idx_surveys, function(x) {
+    tmp <- fit$conf$keyLogFpar[x, ] + 1
+    tmp <- tmp[tmp > 0]
+  })
+
+  sum(colnames(dat) == "logFpar") ### there are 9 parameters for cod
   ### I assume: 5 for Q1, 4 for Q3, as they have this many ages...
   survey_ages_idx <- split(seq(length(unlist(survey_ages))), 
                            rep(seq(survey_ages), sapply(survey_ages, length))) 
@@ -93,7 +101,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
                                    year = "all", iter = 1:n))
     ### fill with catchability values
-    tmp[] <- exp(t(dat[, colnames(dat) == "logFpar"][,survey_ages_idx[[x]]]))
+    tmp[] <- exp(t(dat[, colnames(dat) == "logFpar"][, idx_LogFpar[[x]]]))
     
     return(tmp)
     
@@ -107,6 +115,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### template
   catch_sd <- FLQuant(dimnames = list(age = dimnames(stock.n)$age, year = "all",
                                       iter = 1:n))
+  
+  # sum(colnames(dat) == "logSdLogObs") 
   
   ### index for catch sd (some ages are linked)
   catch_sd_idx <- idxObs[1, ][idxObs[1, ] > -1] + 1
@@ -126,15 +136,22 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
                                    year = "all", iter = 1:n))
     ### index for sd (some ages are linked)
-    idx <- idxObs[idx_surveys[x], ]
-    idx <- idx[idx > -1] + 1
+    idx_sd <- idxObs[idx_surveys[x], ]
+    idx_sd <- idx_sd[idx_sd > -1] + 1
     
     ### fill with catchability values
-    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs"][, idx]))
+    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs"][, idx_sd]))
     
     return(tmp)
     
   })
+  
+  ### ---------------------------------------------------------------------- ###
+  ### 
+  ### ---------------------------------------------------------------------- ###
+  ### not used so far: 
+  ### logSdLogN (2 values per sim)
+  ### logSdLogFsta (1)
   
   return(list(stock.n = stock.n, harvest = harvest,
               survey_catchability = catchability, catch_sd = catch_sd,
