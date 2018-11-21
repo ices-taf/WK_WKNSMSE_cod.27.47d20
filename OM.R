@@ -254,8 +254,13 @@ plot(stk_stf)
 ### stock recruitment ####
 ### ------------------------------------------------------------------------ ###
 
+# Truncated stock objects for defining different recruitment regimes
+# Note EQSIM would end with the data rather than intermediate year 
+#stk_trun<-window(stk, start=1987, end=2017)
+stk_trun2<-window(stk, start=1997, end=2018)
+
 ### create stock recruitment model: segmented regression (hockey-stick)
-sr <- as.FLSR(stk, model = "segreg")
+sr <- as.FLSR(stk_trun2, model = "segreg")
 ### fit model individually to each iteration and suppress output to screen
 suppressWarnings(. <- capture.output(sr <- fmle(sr)))
 
