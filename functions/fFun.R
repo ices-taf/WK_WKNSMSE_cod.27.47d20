@@ -89,7 +89,7 @@ SAM_wrapper <- function(stk0, idx0, ay, forecast = FALSE,
     }
     
     ### do forecast for all iterations
-    fc <- lapply(fit, function(fit_i) {
+    fc <- foreach(fit_i = fit, .errorhandling = "pass") %do% {
       
       ### overwrite landing fraction with last year, if requested
       if (!is.null(fwd_yrs_lf_remove)) {
@@ -119,13 +119,19 @@ SAM_wrapper <- function(stk0, idx0, ay, forecast = FALSE,
       
       return(list(stock.n = numbers))
       
-    })
+    }
+    ### if forecast failed for a iteration, the list element will for this
+    ### iteration will be an error message
     
     ### get numbers
     fc_stock.n <- lapply(fc, "[[", "stock.n")
     
     ### insert stock numbers
-    stock.n(stk0)[, ac(yrs)] <- unlist(fc_stock.n)
+    for (iter_i in seq(dim(stk0)[6])) {
+      ### do not insert numbers if forecast failed
+      if (!is.numeric(fc_stock.n[[iter_i]])) next()
+      stock.n(stk0)[, ac(yrs),,,, iter_i] <- fc_stock.n[[iter_i]]
+    }
     
     ### extend stock characteristics required for calculation of SSB, 
     ### weights, etc.
