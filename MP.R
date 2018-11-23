@@ -103,7 +103,8 @@ res <- foreach(scn = seq_along(ctrl.mps)[scns], .packages = required_pckgs,
                .export = ls(), .errorhandling = "pass") %:%
          foreach(part = 1:n_parts, .errorhandling = "pass") %dopar% {
   ### load external functions
-  invisible(lapply(paste0("functions/", load_files), source))
+  invisible(lapply(list.files(path = "functions/", pattern = "*.R$", 
+                             full.names = TRUE), source))
 
 # n_parts <- 10
 # part <- 2
