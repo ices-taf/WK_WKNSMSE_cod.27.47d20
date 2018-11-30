@@ -256,20 +256,19 @@ plot(stk_stf)
 ### ------------------------------------------------------------------------ ###
 ### stock recruitment ####
 ### ------------------------------------------------------------------------ ###
+### fit hockey-stick model
+### get residuals from smoothed residuals
 
-# Truncated stock objects for defining different recruitment regimes
-# Note EQSIM would end with the data rather than intermediate year 
-#stk_trun<-window(stk, start=1987, end=2017)
-stk_trun2 <- window(stk, start = 1997, end = 2018)
-
-### create stock recruitment model: segmented regression (hockey-stick)
-sr <- as.FLSR(stk_trun2, model = "segreg")
+### use only data from 1997 and later
+sr <- as.FLSR(window(stk_stf, start = 1997), model = "segreg")
 ### fit model individually to each iteration and suppress output to screen
 suppressWarnings(. <- capture.output(sr <- fmle(sr)))
 
-### plot models
 plot(sr)
+### check breakpoints
+summary(params(sr)["b"])
 
+### plot model and data
 as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   mutate(age = NULL,
          year = ifelse(qname == "SSB", year + 1, year)) %>%
@@ -278,24 +277,37 @@ as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   geom_point(aes(x = SSB, y = rec, group = iter), 
              alpha = 0.5, colour = "grey", shape = 1) +
   geom_line(aes(x = SSB, y = fitted, group = iter)) +
-  theme_bw()
+  theme_bw() + xlim(0, NA) + ylim(0, NA)
 
+### years with missing residuals
+yrs_res <- dimnames(sr)$year[which(is.na(iterMeans(rec(sr))))]
 
-### create residuals for projection
-set.seed(1)
-sr_res <- window(residuals(sr), end = dims(residuals(sr))$maxyear + n_years)
-### calculate based on sd from residuals of model fit
-sr_res_new <- rnorm(n, 
-  FLQuant(0, dimnames = list(year = (yr_data + 1):(yr_data + n_years))),
-  mean(c(apply(residuals(sr), 6, sd))))
-sr_res[, ac((yr_data + 1):(yr_data + n_years))] <- sr_res_new
-### exponentiate
-sr_res <- exp(sr_res)
+### go through iterations and create residuals
+### use kernel density to create smooth distribution of residuals
+### and sample from this distribution
+res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
+                   .errorhandling = "pass") %do% {
+                     
+  set.seed(iter_i)
+  
+  ### get residuals for current iteration
+  res_i <- c(FLCore::iter(residuals(sr), iter_i))
+  res_i <- res_i[!is.na(res_i)]
+  
+  ### calculate kernel density of residuals
+  density <- density(x = res_i)
+  ### sample residuals
+  mu <- sample(x = res_i, size = length(yrs_res), replace = TRUE)
+  ### "smooth", i.e. sample from density distribution
+  res_new <- rnorm(n = length(yrs_res), mean = mu, sd = density$bw)
 
-plot(sr_res)
+  return(res_new)
+  
+}
+summary(exp(unlist(res_new)))
+### insert into model
+residuals(sr)[, yrs_res] <- unlist(res_new)
 
-### store residuals in model object
-residuals(sr) <- sr_res
 
 ### ------------------------------------------------------------------------ ###
 ### stf for 2018: assume catch advice is taken ####
@@ -424,6 +436,10 @@ saveRDS(catch_res, file = "input/cod4/catch_res.rds")
 ### ------------------------------------------------------------------------ ###
 ### https://github.com/flr/mse
 
+### save workspace to start from here
+# save.image(file = "input/cod4/image.RData")
+# load(file = "input/cod4/image.RData")
+
 ### some arguments (passed to mp())
 genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
                 y0 = yr_data, ### first simulation year
@@ -484,9 +500,9 @@ ctrl_obj <- mpCtrl(list(
 
 ### try running mse
 # debugonce(mp)
-res1 <- mp(om = om, 
-           oem = oem, 
-           ctrl.mp = ctrl_obj, 
-           genArgs = genArgs)
+# res1 <- mp(om = om, 
+#            oem = oem, 
+#            ctrl.mp = ctrl_obj, 
+#            genArgs = genArgs)
 
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
