@@ -349,10 +349,10 @@ SAM_wrapper <- function(stk, idx, tracking,
 ### ------------------------------------------------------------------------ ###
 ### phcr: parameterize HCR ####
 ### ------------------------------------------------------------------------ ###
-phcr_WKNSMSE <- function(Btrigger, Ftrgt, tracking, ...) {
+phcr_WKNSMSE <- function(Btrigger, Ftrgt, Bpa, Fpa, tracking, ...) {
   
   ### coerce into FLPar
-  hcrpars <- FLPar(Btrigger = Btrigger, Ftrgt = Ftrgt)
+  hcrpars <- FLPar(Btrigger = Btrigger, Ftrgt = Ftrgt, Fpa = Fpa, Bpa = Bpa)
   
   ### return as list
   ### keep tracking unchanged
@@ -463,6 +463,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
                        genArgs, ### contains ay (assessment year)
                        TAC_constraint = c(FALSE, TRUE),
                        upper = Inf, lower = -Inf, Btrigger_cond = FALSE,
+                       ### short term forecast
                        fwd_trgt = c("fsq", "hcr"), ### target in forecast
                        fwd_yrs = 2, ### number of years to add
                        fwd_yrs_average = -3:0, ### years used for averages
@@ -470,6 +471,12 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
                        fwd_yrs_sel = -3:-1, ### selectivity
                        fwd_yrs_lf_remove = -2:-1,
                        fwd_splitLD = TRUE, 
+                       ### banking and borrowing
+                       BB = FALSE, ### banking and borrowing
+                       BB_conditional = FALSE, ### check status before BB
+                       BB_rho, ### definition of BB
+                       ### reference points
+                       hcrpars = list(),
                        ...) {
   
   ### get current (assessment) year
@@ -487,56 +494,75 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### if single fit, turn into list
   if (is(fit, "sam")) fit <- list(fit)
   
+  ### if conditional banking & borrowing applied, extend forecast for one more
+  ### year to check SSB in year after advice year
+  ### for this additional forecast assume Fsq as target
+  ### i.e. target F from HCR twice, in analogy to intermediate year assumption
+  if (isTRUE(BB) & isTRUE(BB_conditional)) {
+    
+    ### duplicate last target value
+    fwd_trgt <- c(fwd_trgt, tail(fwd_trgt, 1))
+    
+  }
+  
   ### go through all model fits
   fc <- foreach(fit_i = fit, iter_i = seq_along(fit), 
                 .errorhandling = "pass") %do% {
                   
-                  ### overwrite landing fraction with last year, if requested
-                  if (!is.null(fwd_yrs_lf_remove)) {
-                    ### index for years to remove/overwrite
-                    idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
-                    ### overwrite
-                    fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
-                  }
-                  
-                  ### check how to do forecast
-                  ### currently, can only do F status quo and F target from ctrl object
-                  fscale <- ifelse(fwd_trgt == "fsq", 1, NA) ### scaled Fsq
-                  ### target F values
-                  fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA) 
-                  
-                  ### years for average values
-                  ave.years <- max(fit_i$data$years) + fwd_yrs_average
-                  ### years for sampling of recruitment years
-                  if (is.null(fwd_yrs_rec_start)) {
-                    rec.years <- fit_i$data$years ### use all years, if not defined
-                  } else {
-                    rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
-                  }
-                  
-                  ### years where selectivity is not used for mean in forecast
-                  overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
-                  
-                  ### forecast 
-                  fc <- stockassessment::forecast(fit = fit_i, fscale = fscale, fval = fval,
-                                                  ave.years = ave.years,
-                                                  rec.years = rec.years,
-                                                  overwriteSelYears = overwriteSelYears,
-                                                  splitLD = fwd_splitLD)
-                  
-                  ### return catch in ay + 1
-                  return(attr(fc, "tab")[ac(ay + 1), "catch:median"])
-                  
-                }
+    ### overwrite landing fraction with last year, if requested
+    if (!is.null(fwd_yrs_lf_remove)) {
+      ### index for years to remove/overwrite
+      idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
+      ### overwrite
+      fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
+    }
+    
+    ### check how to do forecast
+    ### currently, can only do F status quo and F target from ctrl object
+    fscale <- ifelse(fwd_trgt == "fsq", 1, NA) ### scaled Fsq
+    ### target F values
+    fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA) 
+    
+    ### years for average values
+    ave.years <- max(fit_i$data$years) + fwd_yrs_average
+    ### years for sampling of recruitment years
+    if (is.null(fwd_yrs_rec_start)) {
+      rec.years <- fit_i$data$years ### use all years, if not defined
+    } else {
+      rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
+    }
+    
+    ### years where selectivity is not used for mean in forecast
+    overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
+    
+    ### forecast 
+    fc <- stockassessment::forecast(fit = fit_i, fscale = fscale, fval = fval,
+                                    ave.years = ave.years,
+                                    rec.years = rec.years,
+                                    overwriteSelYears = overwriteSelYears,
+                                    splitLD = fwd_splitLD)
+    
+    ### return forecast table
+    return(attr(fc, "tab"))#[ac(ay + 1), "catch:median"])
+    
+  }
   ### if forecast fails, error message returned
   ### replace error message with NA
-  catch_target <- unlist(ifelse(sapply(fc, is, "error"), NA, fc))
+  ### extract catch target
+  catch_target <- sapply(fc, function(x) {
+    if (is(x, "error")) {
+      return(NA)
+    } else {
+      return(x[ac(ay + 1), "catch:median"])
+    }
+  })
   
-  ### create ctrl object
-  ctrl <- getCtrl(values = catch_target, quantity = "catch", 
-                  years = ay + 1, it = it)
+  ### get reference points
+  hcrpars <- FLPar(hcrpars)
+  if (dim(hcrpars)[2] == 1) hcrpars <- propagate(hcrpars, it)
   
-  ### TAC constraint
+  ### ---------------------------------------------------------------------- ###
+  ### TAC constraint ####
   if (isTRUE(TAC_constraint)) {
     
     ### target year
@@ -561,18 +587,17 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### conditional constraint based on SSB>=Btrigger?
     if (isTRUE(Btrigger_cond)) {
       
-      ##########################################################################
-      ##########################################################################
-      ##########################################################################
-      ### WARNING
-      ### hcrpars not passed to module
-      ### using global hcrpars
-      ##########################################################################
-      ##########################################################################
-      ##########################################################################
+      ### get SSB in TAC year from forecast
+      SSB_TACyr <- sapply(fc, function(x) {
+        if (is(x, "error")) {
+          return(NA)
+        } else {
+          return(x[ac(ay + 1), "ssb:median"])
+        }
+      })
       
       ### iterations where SSB is at or above Btrigger at start of TAC year
-      pos_Btrigger <- which(ssb(stk0)[, ac(ay + 1)] >= c(hcrpars["Btrigger"]))
+      pos_Btrigger <- which(SSB_TACyr >= c(hcrpars["Btrigger"]))
       ### only apply TAC constraint if both
       ### - TAC change exceeds limit
       ### - stock at or above Btrigger
@@ -583,14 +608,102 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### modify advice
     catch_target[pos] <- catch_prev[pos] * changes_new[pos]/100
     
-    ### save new targets
-    ctrl@trgtArray[, "val", ] <- catch_target
-    
-    
   }
   
-  ### return catch target
-  ### keep tracking unchanged
+  ### ---------------------------------------------------------------------- ###
+  ### banking and borrowing ####
+  
+  if (isTRUE(BB)) {
+    
+    ### get current rho
+    BB_rho_i <- tail(rep(BB_rho, length.out = (ay - genArgs$y0 + 1)), 1)
+    
+    ### get catch borrowed last year
+    BB_return <- tracking["BB_borrow", ac(ay - 1)]
+    ### assume nothing borrowed if NA
+    BB_return <- ifelse(!is.na(BB_return), BB_return, 0)
+    
+    ### get catch banked last year
+    BB_bank_use <- tracking["BB_bank", ac(ay - 1)]
+    BB_bank_use <- ifelse(!is.na(BB_bank_use), BB_bank_use, 0)
+    
+    ### bank for next year
+    if (BB_rho_i < 0) {
+      BB_bank <- catch_target * abs(BB_rho_i)
+    } else {
+      BB_bank <- rep(0, it)
+    }
+    
+    ### borrow from next year
+    if (BB_rho_i > 0) {
+      BB_borrow <- catch_target * abs(BB_rho_i)
+    } else {
+      BB_borrow <- rep(0, it)
+    }
+    
+    ### conditional banking and borrowing?
+    if (isTRUE(BB_conditional)) {
+      
+      ### get SSB in TAC year
+      SSB_TACyr <- sapply(fc, function(x) {
+        if (is(x, "error")) {
+          return(NA)
+        } else {
+          return(x[ac(ay + 1), "ssb:median"])
+        }
+      })
+      ### get SSB in year after TAC year
+      SSB_TACyr1 <- sapply(fc, function(x) {
+        if (is(x, "error")) {
+          return(NA)
+        } else {
+          return(x[ac(ay + 2), "ssb:median"])
+        }
+      })
+      ### get F in TAC year
+      F_TACyr <- sapply(fc, function(x) {
+        if (is(x, "error")) {
+          return(NA)
+        } else {
+          return(x[ac(ay + 1), "fbar:median"])
+        }
+      })
+      
+      ### check if SSB in TAC year below Bpa AND F above Fpa
+      pos_neg1 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
+                          F_TACyr > c(hcrpars["Fpa"]))
+      ### check if SSB below Bpa in TAC year and year after
+      pos_neg2 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
+                          SSB_TACyr1 < c(hcrpars["Bpa"]))
+      ### combine both conditions
+      pos_neg <- union(pos_neg1, pos_neg2)
+      
+      ### if status evaluated as not precautionary
+      ### stop banking and borrowing
+      ### (but still pay back/use from last year)
+      BB_bank[pos_neg] <- 0
+      BB_borrow[pos_neg] <- 0
+      
+    }
+    
+  ### save transfers into  tracking
+  tracking["BB_return", ac(ay)] <- BB_return
+  tracking["BB_bank_use", ac(ay)] <- BB_bank_use
+  tracking["BB_bank", ac(ay)] <- BB_bank
+  tracking["BB_borrow", ac(ay)] <- BB_borrow
+  
+  ### correct target catch
+  catch_target <- catch_target - c(BB_return) +
+    c(BB_bank_use) - c(BB_bank) + c(BB_borrow)
+  
+  ### create ctrl object
+  ctrl <- getCtrl(values = catch_target, quantity = "catch", 
+                  years = ctrl@target$year, it = it)
+  
+  
+  }
+  
+  ### return catch target and tracking
   return(list(ctrl = ctrl, tracking = tracking))
   
 }
@@ -599,8 +712,6 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
 ### extract uncertainty from SAM object ####
 ### ------------------------------------------------------------------------ ###
 ### function for creating iterations based on estimation of uncertainty in SAM
-
-
 
 SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
@@ -633,7 +744,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   ### extract values for parameters
   est <- c(sds$par.fixed, sds$par.random)
-  ### estimate covariance?
+  ### get covariance matrix of all model parameters
   cov <- solve(sds$jointPrecision)
   
   ### create random values based on estimation and covariance
@@ -753,6 +864,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### 
   ### ---------------------------------------------------------------------- ###
   ### not used so far: 
+  ### process error:
   ### logSdLogN (2 values per sim)
   ### logSdLogFsta (1)
   

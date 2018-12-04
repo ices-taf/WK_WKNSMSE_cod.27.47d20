@@ -27,7 +27,7 @@ dir.create(path = "output/runs", recursive = TRUE)
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations/replicates
-n <- 100
+n <- 10
 ### number of years
 n_years <- 20
 ### last data year
@@ -272,7 +272,7 @@ summary(params(sr)["b"])
 as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   mutate(age = NULL,
          year = ifelse(qname == "SSB", year + 1, year)) %>%
-  spread(key = qname, value = data) %>%
+  tidyr::spread(key = qname, value = data) %>%
   ggplot() +
   geom_point(aes(x = SSB, y = rec, group = iter), 
              alpha = 0.5, colour = "grey", shape = 1) +
@@ -307,6 +307,10 @@ res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore",
 summary(exp(unlist(res_new)))
 ### insert into model
 residuals(sr)[, yrs_res] <- unlist(res_new)
+residuals(sr) <- exp(residuals(sr))
+sr_res <- residuals(sr)
+
+plot(sr_res)
 
 
 ### ------------------------------------------------------------------------ ###
@@ -387,6 +391,9 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
 ### ------------------------------------------------------------------------ ###
 ### catch noise ####
 ### ------------------------------------------------------------------------ ###
+### take estimates from sam: uncertainty$catch_sd is "logSdLogObs"
+### assume catch observed by SAM in projection is log-normally distributed
+### around operating model catch
 
 ### create noise for catch
 set.seed(2)
@@ -437,8 +444,20 @@ saveRDS(catch_res, file = "input/cod4/catch_res.rds")
 ### https://github.com/flr/mse
 
 ### save workspace to start from here
-# save.image(file = "input/cod4/image.RData")
-# load(file = "input/cod4/image.RData")
+# save.image(file = "input/cod4/image_100.RData")
+# load(file = "input/cod4/image_100.RData")
+
+### reference points
+refpts_mse <- list(Btrigger = 150000,
+                   Ftrgt = 0.31,
+                   Fpa = 0.39,
+                   Bpa = 150000)
+### some specifications for short term forecast with SAM
+cod4_stf_def <- list(fwd_yrs_average = -3:0,
+                     fwd_yrs_rec_start = 1998,
+                     fwd_yrs_sel = -3:-1,
+                     fwd_yrs_lf_remove = -2:-1,
+                     fwd_splitLD = TRUE)
 
 ### some arguments (passed to mp())
 genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
@@ -465,44 +484,60 @@ oem <- FLoem(method = oem_WKNSMSE,
 ### default management
 ctrl_obj <- mpCtrl(list(
   ctrl.est = mseCtrl(method = SAM_wrapper,
-                     args = list(forecast = TRUE, 
-                                 fwd_trgt = "fsq",
-                                 fwd_yrs = 1, 
-                                 fwd_yrs_average = -3:0, 
-                                 fwd_yrs_rec_start = 1998, 
-                                 fwd_yrs_sel = -3:-1,
-                                 fwd_yrs_lf_remove = -2:-1,
-                                 fwd_splitLD = TRUE,
-                                 newtonsteps = 0,
-                                 rel.tol = 0.001,
-                                 conf = cod4_conf_sam_no_mult,
-                                 parallel = TRUE ### TESTING ONLY
-                                 )),
+                     args = c(### short term forecast specifications
+                              forecast = TRUE, 
+                              fwd_trgt = "fsq", fwd_yrs = 1, 
+                              cod4_stf_def,
+                              ### speeding SAM up
+                              newtonsteps = 0, rel.tol = 0.001,
+                              ### SAM model specifications
+                              conf = list(cod4_conf_sam_no_mult),
+                              parallel = TRUE ### TESTING ONLY
+                              )),
   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
-                      args = list(Btrigger = 150000,
-                                  Ftrgt = 0.31)),
-  #ctrl.hcr = mseCtrl(method = fixedF.hcr, args = list(ftrg = 0.3))
+                      args = refpts_mse),
   ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
   ctrl.is = mseCtrl(method = is_WKNSMSE, 
-                    args = list(fwd_trgt = c("fsq", "hcr"),
-                                fwd_yrs = 2,
-                                fwd_yrs_average = -3:0,
-                                fwd_yrs_rec_start = 1998,
-                                fwd_yrs_sel = -3:-1,
-                                fwd_yrs_lf_remove = -2:-1,
-                                fwd_splitLD = TRUE,
-                                TAC_constraint = TRUE,
-                                lower = -Inf, upper = Inf,
-                                Btrigger_cond = FALSE)),
+                    args = c(hcrpars = list(refpts_mse),
+                             ### for short term forecast
+                             fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
+                             cod4_stf_def,
+                             ### TAC constraint
+                             TAC_constraint = TRUE,
+                             lower = -Inf, upper = Inf,
+                             Btrigger_cond = FALSE,
+                             ### banking and borrowing 
+                             BB = TRUE,
+                             BB_conditional = TRUE,
+                             BB_rho = list(c(-0.1, 0.1))
+                             )),
   ctrl.tm = NULL
 ))
-
+### additional tracking metrics
+tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 
 ### try running mse
+# library(doParallel)
+# cl <- makeCluster(10)
+# registerDoParallel(cl)
 # debugonce(mp)
-# res1 <- mp(om = om, 
-#            oem = oem, 
-#            ctrl.mp = ctrl_obj, 
-#            genArgs = genArgs)
+# debugonce(is_WKNSMSE)
+# res1 <- mp(om = om,
+#            oem = oem,
+#            ctrl.mp = ctrl_obj,
+#            genArgs = genArgs,
+#            tracking = tracking_add)
+
+# ### without BB
+# ctrl_obj2 <- ctrl_obj
+# ctrl_obj2$ctrl.is@args$BB <- FALSE
+# res2 <- mp(om = om,
+#            oem = oem,
+#            ctrl.mp = ctrl_obj2,
+#            genArgs = genArgs,
+#            tracking = tracking_add)
+
+
+
 
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
