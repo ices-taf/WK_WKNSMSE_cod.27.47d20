@@ -44,6 +44,10 @@ is(fit)
 fit
 plot(fit)
 
+### extract model parameters and use them in the simulation as starting values
+sam_initial <- sam_getpar(fit)
+sam_initial$logScale <- numeric(0)
+
 ### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
 ### ------------------------------------------------------------------------ ###
@@ -444,8 +448,8 @@ saveRDS(catch_res, file = "input/cod4/catch_res.rds")
 ### https://github.com/flr/mse
 
 ### save workspace to start from here
-# save.image(file = "input/cod4/image_100.RData")
-# load(file = "input/cod4/image_100.RData")
+# save.image(file = "input/cod4/image_10.RData")
+# load(file = "input/cod4/image_10.RData")
 
 ### reference points
 refpts_mse <- list(Btrigger = 150000,
@@ -490,9 +494,11 @@ ctrl_obj <- mpCtrl(list(
                               cod4_stf_def,
                               ### speeding SAM up
                               newtonsteps = 0, rel.tol = 0.001,
+                              par_ini = list(sam_initial),
+                              track_ini = TRUE, ### store ini for next year
                               ### SAM model specifications
                               conf = list(cod4_conf_sam_no_mult),
-                              parallel = TRUE ### TESTING ONLY
+                              parallel = FALSE ### TESTING ONLY
                               )),
   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),

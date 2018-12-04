@@ -210,7 +210,9 @@ SAM_wrapper <- function(stk, idx, tracking,
                         fwd_yrs_lf_remove = -2:-1,
                         fwd_splitLD = TRUE,
                         parallel = FALSE,
-                        conf = NULL,
+                        conf = NULL, ### SAM configuration
+                        par_ini = NULL, ### initial parameters
+                        track_ini = FALSE, ### store ini for next year
                         ...){
   
   ### get additional arguments
@@ -219,9 +221,30 @@ SAM_wrapper <- function(stk, idx, tracking,
   ### get current (assessment) year
   ay <- genArgs$ay
   
+  ### check if initial parameter values for SAM exist from last year's fit
+  ### and reuse if possible
+  ### this overrides generic initial parameters, if they exist in par_ini
+  ### (they are only used in first simulation year)
+  if (isTRUE(track_ini) & !is.null(attr(tracking@units, "par_ini"))) {
+    
+    par_ini <- attr(tracking@units, "par_ini")
+    
+  }
+  
   ### fit SAM to provided data
-  fit <- FLR_SAM(stk = stk, idx = idx, conf = conf, 
+  fit <- FLR_SAM(stk = stk, idx = idx, conf = conf, par_ini = par_ini,
                  DoParallel = parallel, ...)
+  
+  ### store parameter values and provide them as initial values next year
+  ### store in tracking object, this is the only object which does not get 
+  ### overriden next year
+  ### weird workaround: save as attribute of "unit" slot of tracking,
+  ###                   otherwise the attributes will be lost later...
+  if (isTRUE(track_ini)) {
+    
+    attr(tracking@units, "par_ini") <- sam_getpar(fit)
+    
+  }
   
   ### convert into FLStock
   stk0 <- SAM2FLStock(object = fit, stk = stk) 
@@ -873,3 +896,41 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
               survey_sd = survey_sd))
   
 }
+
+### ------------------------------------------------------------------------ ###
+### additional functions for SAM ####
+### ------------------------------------------------------------------------ ###
+
+### extract parameters of model fit
+sam_getpar <- function(fit) {
+  
+  ### check class
+  if (is(fit, "sam") | is(fit, "list")) {
+    fit <- list(fit)
+  } else if (is(fit, "sam_list")) {
+    ### do nothing
+  } else {
+    stop("unknown fit object")
+  }
+  
+  ### go through fits and extract parameters
+  pars <- foreach(fit_i = fit, .errorhandling = "pass") %do% {
+    
+    p <- fit_i$pl
+    p$missing <- NULL
+    attr(p, "what") <- NULL
+    
+    return(p)
+    
+  }
+  
+  ### return list or params
+  if (length(pars) == 1) {
+    return(pars[[1]])
+  } else {
+    return(pars)
+  }
+
+}
+
+
