@@ -467,7 +467,9 @@ cod4_stf_def <- list(fwd_yrs_average = -3:0,
 genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
                 y0 = yr_data, ### first simulation year
                 iy = yr_data,
-                nsqy = 3 ### not used, but has to provided
+                nsqy = 3, ### not used, but has to provided
+                nblocks = 1, ### block for parallel processing
+                seed = 1 ### random number seed before starting MSE
 )
 
 ### operating model
@@ -507,15 +509,15 @@ ctrl_obj <- mpCtrl(list(
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
-                             cod4_stf_def,
+                             cod4_stf_def#,
                              ### TAC constraint
-                             TAC_constraint = TRUE,
-                             lower = -Inf, upper = Inf,
-                             Btrigger_cond = FALSE,
+                             #TAC_constraint = TRUE,
+                             #lower = -Inf, upper = Inf,
+                             #Btrigger_cond = FALSE,
                              ### banking and borrowing 
-                             BB = TRUE,
-                             BB_conditional = TRUE,
-                             BB_rho = list(c(-0.1, 0.1))
+                             #BB = TRUE,
+                             #BB_conditional = TRUE,
+                             #BB_rho = list(c(-0.1, 0.1))
                              )),
   ctrl.tm = NULL
 ))
@@ -543,7 +545,62 @@ tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 #            genArgs = genArgs,
 #            tracking = tracking_add)
 
+### run MSE
+### WARNING: takes a while...
+### check normal execution
+res1 <- mp(om = om,
+           oem = oem,
+           ctrl.mp = ctrl_obj,
+           genArgs = genArgs,
+           tracking = tracking_add)
+### check mpParallel function
+resp1 <- mpParallel(om = om,
+            oem = oem,
+            ctrl.mp = ctrl_obj,
+            genArgs = genArgs,
+            tracking = tracking_add)
 
+### split into 2 parts
+genArgs$nblocks <- 2
+resp2 <- mpParallel(om = om,
+                    oem = oem,
+                    ctrl.mp = ctrl_obj,
+                    genArgs = genArgs,
+                    tracking = tracking_add)
+### execute in parallel
+library(doParallel)
+cl <- makeCluster(2)
+registerDoParallel(cl)
+### load packages and additional functions into workers
+clusterEvalQ(cl = cl, expr = {
+  library(mse)
+  library(FLash)
+  library(FLfse)
+  library(stockassessment)
+  library(foreach)
+  library(doRNG)
+  source("a4a_mse_WKNSMSE_funs.R")
+})
+### run MSE
+resp3 <- mpParallel(om = om,
+                    oem = oem,
+                    ctrl.mp = ctrl_obj,
+                    genArgs = genArgs,
+                    tracking = tracking_add)
+### try reproducible parallel execution
+library(doRNG)
+registerDoRNG(123) 
+resp4 <- mpParallel(om = om,
+                    oem = oem,
+                    ctrl.mp = ctrl_obj,
+                    genArgs = genArgs,
+                    tracking = tracking_add)
+registerDoRNG(123) 
+resp5 <- mpParallel(om = om,
+                    oem = oem,
+                    ctrl.mp = ctrl_obj,
+                    genArgs = genArgs,
+                    tracking = tracking_add)
 
-
+### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
