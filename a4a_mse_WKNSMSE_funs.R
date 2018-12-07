@@ -741,19 +741,19 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   if (!is(fit, "sam")) stop("fit has to be class \"sam\"")
   
   ### index for fishing mortality ages
-  idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
+  #idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
   #idxF <- idxF[idxF != 0] ### remove 0s
   
   ### index for F variances (usually some ages are bound)
-  idxNVar <- fit$conf$keyVarLogN 
+  #idxNVar <- fit$conf$keyVarLogN 
   
   ### get ages used for calculating fbar
-  bAges <- fit$conf$fbarRange
-  bAges <- do.call(':', as.list(bAges))
+  #bAges <- fit$conf$fbarRange
+  #bAges <- do.call(':', as.list(bAges))
   
   ### index for stock numbers ages
   #idxN <- 1:ncol(natural.mortality)
-  idxN <- seq(min(fit$data$minAgePerFleet), max(fit$data$maxAgePerFleet))
+  #idxN <- seq(min(fit$data$minAgePerFleet), max(fit$data$maxAgePerFleet))
   ### index for observation variances
   idxObs <- fit$conf$keyVarObs # starts at 0
   
@@ -799,9 +799,9 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### F at age
   harvest <- stk_template
   ### insert values for estimated ages
-  harvest[unique(idxF)] <- exp(t(dat[, colnames(dat) == "logF"]))
+  harvest[] <- exp(t(dat[, colnames(dat) == "logF"]))
   ### duplicate ages, if some of them are bound
-  harvest[] <- harvest[idxF]
+  #harvest[] <- harvest[idxF]
   
   ### ---------------------------------------------------------------------- ###
   ### surveys ####
@@ -821,7 +821,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   })
   
   sum(colnames(dat) == "logFpar") ### there are 9 parameters for cod
-  ### I assume: 5 for Q1, 4 for Q3, as they have this many ages...
+  ### 5 for Q1 (ages 1-5), 4 for Q3 (ages 1-4).
   survey_ages_idx <- split(seq(length(unlist(survey_ages))), 
                            rep(seq(survey_ages), sapply(survey_ages, length))) 
   
