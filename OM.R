@@ -237,23 +237,39 @@ plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 ### ------------------------------------------------------------------------ ###
 
 ### special case for NS cod
-### catch & catch weights until 2017,
-### maturity, stock weights, stock & F etc until 2018
+### maturity data available for 2018 (based on the IBTS Q1)
+### stock weights, M etc in 2018 based on a three year average to enable calculation of SSB
+### although SAM estimates F in 2018, this is not reported or taken forward into forcasts by the WG
 # stk_stf2017 <- stf(window(stk, end = 2017), n_years + 1)
 stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### use all available data
 stk_stf <- stk_stf2018
-### maturity data 2018 is already average of previous years
-### use this in projection
-mat(stk_stf)[, ac((2018 + 1):(2018 + n_years))] <- mat(stk_stf[, ac(2018)])
 
-### last 3 data years for catch weights
-catch.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
-  apply(catch.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
-landings.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
-  apply(landings.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
-discards.wt(stk_stf)[, ac(2018:(2018 + n_years))] <- 
-  apply(discards.wt(stk)[, ac(2015:2017)], c(1, 6), mean)
+### Resample weights, maturity and natural mortality from the last 5 years (2013-2017)
+# set up an array with one resampled year for each projection year (including intermediate year) and replicate
+# use the same resampled year for all biological parameters
+# this is the approach used in eqsim for North Sea cod
+r.bio <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
+
+# loop to fill in replicates
+# can probably be coded more elegantly than this!
+for (iter in 1:n){
+  
+  # 2018 weights and natural mortality are averages in the assessment
+  # so use a resampled value for 2018
+  catch.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- catch.wt(stk)[, ac(r.bio[,iter]),,,,1]
+  discards.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- discards.wt(stk)[, ac(r.bio[,iter]),,,,1]
+  landings.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- landings.wt(stk)[, ac(r.bio[,iter]),,,,1]
+  stock.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- stock.wt(stk)[, ac(r.bio[,iter]),,,,1]
+  m(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- m(stk)[, ac(r.bio[,iter]),,,,1]
+  
+  # 2018 maturiy is based on actual data, so use this value for 2018
+  # and resample from 2019 onwards
+  mat(stk_stf)[, ac(2019:(2018 + n_years)),,,,iter] <- mat(stk)[, ac(r.bio[2:nrow(r.bio),iter]),,,,1]
+}
+
+# This may get overwritten later, but usual approach is to assume last data year F in intermediate year
+harvest(stk_stf)[, ac(2018)] <- harvest(stk)[, ac(2017)]
 
 plot(stk_stf)
 
