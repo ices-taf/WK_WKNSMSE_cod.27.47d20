@@ -299,8 +299,14 @@ as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   geom_line(aes(x = SSB, y = fitted, group = iter)) +
   theme_bw() + xlim(0, NA) + ylim(0, NA)
 
+# Check extent of autocorrelation (need to check what goes into this)
+#acf(window(stock.n(stk_orig)[1], start = 1998))
+#acf(rec(sr)[!is.na(rec(sr))])
+
 ### years with missing residuals
-yrs_res <- dimnames(sr)$year[which(is.na(iterMeans(rec(sr))))]
+# NW: dimnames produces NULL for me
+# yrs_res <- dimnames(sr)$year[which(is.na(iterMeans(rec(sr))))]
+yrs_res <- colnames(rec(sr))[which(is.na(iterMeans(rec(sr))))]
 
 ### go through iterations and create residuals
 ### use kernel density to create smooth distribution of residuals
@@ -386,7 +392,7 @@ for (idx_i in seq_along(idx_dev)) {
   ### noise
   idx_dev[[idx_i]][] <- stats::rnorm(n = length(idx_dev[[idx_i]]),
                                    mean = 0, sd = idx_dev[[idx_i]])
-  idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
+  #idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]]) # Already exp(logSdLogObs)?
 }
 
 
@@ -420,7 +426,7 @@ set.seed(2)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
 catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
                             sd = uncertainty$catch_sd)
-catch_res <- exp(catch_res)
+#catch_res <- exp(catch_res) # Already exp(logSdLogObs)?
 plot(catch_res)
 
 
