@@ -741,8 +741,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   if (!is(fit, "sam")) stop("fit has to be class \"sam\"")
   
   ### index for fishing mortality ages
-  #idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
-  #idxF <- idxF[idxF != 0] ### remove 0s
+  idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
+  idxF <- idxF[idxF != 0] ### remove 0s
   
   ### index for F variances (usually some ages are bound)
   #idxNVar <- fit$conf$keyVarLogN 
@@ -799,9 +799,9 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### F at age
   harvest <- stk_template
   ### insert values for estimated ages
-  harvest[] <- exp(t(dat[, colnames(dat) == "logF"]))
+  harvest[unique(idxF)] <- exp(t(dat[, colnames(dat) == "logF"]))
   ### duplicate ages, if some of them are bound
-  #harvest[] <- harvest[idxF]
+  harvest[] <- harvest[idxF]
   
   ### ---------------------------------------------------------------------- ###
   ### surveys ####
