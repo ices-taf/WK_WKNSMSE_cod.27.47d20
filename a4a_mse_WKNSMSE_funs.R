@@ -735,6 +735,9 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
 ### extract uncertainty from SAM object ####
 ### ------------------------------------------------------------------------ ###
 ### function for creating iterations based on estimation of uncertainty in SAM
+### note: SAM works on a log scale and all reported parameters are also on a 
+###       scale, even standard deviations.
+###       Therefore, the values returned from this function are exponentiated
 
 SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
@@ -846,7 +849,6 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### template
   catch_sd <- FLQuant(dimnames = list(age = dimnames(stock.n)$age, year = "all",
                                       iter = 1:n))
-  
   # sum(colnames(dat) == "logSdLogObs") 
   
   ### index for catch sd (some ages are linked)
@@ -854,6 +856,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   ### extract values
   catch_sd[] <- exp(t(dat[, colnames(dat) == "logSdLogObs"][, catch_sd_idx]))
+  ### logSdLogObs is the log of the SD of the log observations
+  ### exponentiate values here to get SD (and not logSD)
   
   ### ---------------------------------------------------------------------- ###
   ### standard deviation - surveys ####

@@ -333,6 +333,7 @@ res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore",
 summary(exp(unlist(res_new)))
 ### insert into model
 residuals(sr)[, yrs_res] <- unlist(res_new)
+### exponeniate residuals to get factor
 residuals(sr) <- exp(residuals(sr))
 sr_res <- residuals(sr)
 
@@ -391,12 +392,12 @@ for (idx_i in seq_along(idx_dev)) {
   idx_dev[[idx_i]][] <- uncertainty$survey_sd[[idx_i]]
   ### noise
   idx_dev[[idx_i]][] <- stats::rnorm(n = length(idx_dev[[idx_i]]),
-                                   mean = 0, sd = idx_dev[[idx_i]])
-  #idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]]) # Already exp(logSdLogObs)?
+                                     mean = 0, sd = idx_dev[[idx_i]])
+  ### exponentiate to get from normal to log-normal scale
+  idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
 }
 
-
-### compare to original survey(s)
+### compare simulated to original survey(s)
 as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
                        cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
                        sim_q1 = (index(idx$IBTS_Q1_gam)),
@@ -425,10 +426,13 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
 set.seed(2)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
 catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
-                            sd = uncertainty$catch_sd)
-#catch_res <- exp(catch_res) # Already exp(logSdLogObs)?
-plot(catch_res)
+                            log = uncertainty$catch_sd)
+### the catch_res values are on a normale scale,
+### exponentiate to get log-normal 
+catch_res <- exp(catch_res)
+### catch_res is a factor by which the numbers at age are multiplied
 
+plot(catch_res)
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
