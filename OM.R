@@ -62,11 +62,11 @@ ages <- fit$conf$minAge:fit$conf$maxAge
 yrs <- fit$conf$keyScaledYears
 catch_mult <- FLQuant(
   matrix(data = fit$pl$logScale[(fit$conf$keyParScaledYA + 1)], 
-       ncol = fit$conf$noScaledYears,
-       nrow = length(fit$conf$minAge:fit$conf$maxAge),
-       byrow = TRUE), 
-       dimnames = list(year = fit$conf$keyScaledYears, 
-                       age = fit$conf$minAge:fit$conf$maxAge))
+         ncol = fit$conf$noScaledYears,
+         nrow = length(fit$conf$minAge:fit$conf$maxAge),
+         byrow = TRUE), 
+  dimnames = list(year = fit$conf$keyScaledYears, 
+                  age = fit$conf$minAge:fit$conf$maxAge))
 catch_mult <- exp(catch_mult)
 
 cod4_stk2 <- cod4_stk
@@ -249,11 +249,12 @@ stk_stf <- stk_stf2018
 # set up an array with one resampled year for each projection year (including intermediate year) and replicate
 # use the same resampled year for all biological parameters
 # this is the approach used in eqsim for North Sea cod
+set.seed(1)
 r.bio <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
 
 # loop to fill in replicates
 # can probably be coded more elegantly than this!
-for (iter in 1:n){
+for (iter in 1:n) {
   
   # 2018 weights and natural mortality are averages in the assessment
   # so use a resampled value for 2018
@@ -379,6 +380,8 @@ for (idx_i in seq_along(idx)) {
   index.q(idx[[idx_i]])[] <- uncertainty$survey_catchability[[idx_i]]
   
 }
+### create copy of index with original values
+idx_raw <- lapply(idx ,index)
 ### calculate index values
 idx <- calc_survey(stk = stk_fwd, idx = idx)
 
@@ -397,12 +400,23 @@ for (idx_i in seq_along(idx_dev)) {
   idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
 }
 
+### modify residuals for historical period so that index values passed to 
+### stock assessment are the ones observed in reality
+### IBTS Q1, values up to 2018
+idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <- 
+  idx_raw$IBTS_Q1_gam[, dimnames(idx_raw$IBTS_Q1_gam)$year <= 2018] /
+  index(idx$IBTS_Q1_gam)[, dimnames(idx$IBTS_Q1_gam)$year <= 2018]
+### IBTS Q3, values up to 2017
+idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2018] <- 
+  idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2018] /
+  index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam)$year <= 2018]
+
 ### compare simulated to original survey(s)
 as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
                        cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
                        sim_q1 = (index(idx$IBTS_Q1_gam)),
                        sim_q3 = (index(idx$IBTS_Q3_gam))
-              )) %>%
+)) %>%
   mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
          source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
   filter(year <= 2019) %>%
@@ -414,6 +428,15 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
                alpha = 0.5) +
   stat_summary(fun.y = median, geom = "line") +
   theme_bw()
+
+### check survey
+# idx0 <- calc_survey(stk = stk_fwd, idx = idx)
+# idx0 <- lapply(seq_along(idx0), function(idx_i) {
+#   idx_tmp <- idx0[[idx_i]]
+#   index(idx_tmp) <- index(idx_tmp) * idx_dev[[idx_i]]
+#   return(idx_tmp)
+# })
+# plot(index(idx0[[2]]))
 
 ### ------------------------------------------------------------------------ ###
 ### catch noise ####
@@ -431,6 +454,10 @@ catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0,
 ### exponentiate to get log-normal 
 catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
+
+### for historical period, pass on real observed catch
+### -> remove deviation
+catch_res[, dimnames(catch_res)$year <= 2017] <- 1
 
 plot(catch_res)
 
@@ -501,7 +528,7 @@ genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
 ### operating model
 om <- FLom(stock = stk_fwd, ### stock 
            sr = sr ### stock recruitment and precompiled residuals
-           )
+)
 
 ### observation (error) model
 oem <- FLoem(method = oem_WKNSMSE,
@@ -517,17 +544,17 @@ oem <- FLoem(method = oem_WKNSMSE,
 ctrl_obj <- mpCtrl(list(
   ctrl.est = mseCtrl(method = SAM_wrapper,
                      args = c(### short term forecast specifications
-                              forecast = TRUE, 
-                              fwd_trgt = "fsq", fwd_yrs = 1, 
-                              cod4_stf_def,
-                              ### speeding SAM up
-                              newtonsteps = 0, rel.tol = 0.001,
-                              par_ini = list(sam_initial),
-                              track_ini = TRUE, ### store ini for next year
-                              ### SAM model specifications
-                              conf = list(cod4_conf_sam_no_mult),
-                              parallel = FALSE ### TESTING ONLY
-                              )),
+                       forecast = TRUE, 
+                       fwd_trgt = "fsq", fwd_yrs = 1, 
+                       cod4_stf_def,
+                       ### speeding SAM up
+                       newtonsteps = 0, rel.tol = 0.001,
+                       par_ini = list(sam_initial),
+                       track_ini = TRUE, ### store ini for next year
+                       ### SAM model specifications
+                       conf = list(cod4_conf_sam_no_mult),
+                       parallel = TRUE ### TESTING ONLY
+                     )),
   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
   ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
@@ -544,7 +571,7 @@ ctrl_obj <- mpCtrl(list(
                              #BB = TRUE,
                              #BB_conditional = TRUE,
                              #BB_rho = list(c(-0.1, 0.1))
-                             )),
+                    )),
   ctrl.tm = NULL
 ))
 ### additional tracking metrics
@@ -581,10 +608,10 @@ res1 <- mp(om = om,
            tracking = tracking_add)
 ### check mpParallel function
 resp1 <- mpParallel(om = om,
-            oem = oem,
-            ctrl.mp = ctrl_obj,
-            genArgs = genArgs,
-            tracking = tracking_add)
+                    oem = oem,
+                    ctrl.mp = ctrl_obj,
+                    genArgs = genArgs,
+                    tracking = tracking_add)
 
 ### split into 2 parts
 genArgs$nblocks <- 2
