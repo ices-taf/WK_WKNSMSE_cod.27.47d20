@@ -407,9 +407,9 @@ idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <-
   idx_raw$IBTS_Q1_gam[, dimnames(idx_raw$IBTS_Q1_gam)$year <= 2018] /
   index(idx$IBTS_Q1_gam)[, dimnames(idx$IBTS_Q1_gam)$year <= 2018]
 ### IBTS Q3, values up to 2017
-idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2018] <- 
-  idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2018] /
-  index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam)$year <= 2018]
+idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <- 
+  idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2017] /
+  index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam)$year <= 2017]
 
 ### compare simulated to original survey(s)
 as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
