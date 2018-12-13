@@ -300,9 +300,10 @@ as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   geom_line(aes(x = SSB, y = fitted, group = iter)) +
   theme_bw() + xlim(0, NA) + ylim(0, NA)
 
-# Check extent of autocorrelation (need to check what goes into this)
-#acf(window(stock.n(stk_orig)[1], start = 1998))
-#acf(rec(sr)[!is.na(rec(sr))])
+# Check extent of autocorrelation
+# Not significant, so no need to account for it in this OM
+acf(window(stock.n(stk_orig)[1], start = 1998))
+
 
 ### years with missing residuals
 # NW: dimnames produces NULL for me
