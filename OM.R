@@ -409,6 +409,31 @@ sr_res <- residuals(sr)
 
 plot(sr_res)
 
+### ------------------------------------------------------------------------ ###
+### process noise ####
+### ------------------------------------------------------------------------ ###
+### create FLQuant with process noise
+### this will be added to the values obtained from fwd() in the MSE
+
+### create noise for process error
+set.seed(2)
+proc_res <- stock.n(stk_stf) %=% 0 ### template FLQuant
+proc_res[] <- stats::rnorm(n = length(proc_res), mean = 0, 
+                           sd = uncertainty$proc_error)
+### the proc_res values are on a normale scale,
+### exponentiate to get log-normal 
+proc_res <- exp(proc_res)
+### proc_res is a factor by which the numbers at age are multiplied
+
+### for historical period, numbers already include process error from SAM
+### -> remove deviation
+proc_res[, dimnames(proc_res)$year <= 2017] <- 1
+
+### remove deviation for first age class (recruits)
+proc_res[1, ] <- 1
+
+plot(proc_res)
+
 
 ### ------------------------------------------------------------------------ ###
 ### stf for 2018: assume catch advice is taken ####
@@ -421,6 +446,8 @@ ctrl <- fwdControl(data.frame(year = 2018, quantity = "catch",
 stk_int <- stk_stf
 stk_int[] <- fwd(stk_stf, ctrl = ctrl, sr = sr, sr.residuals = sr_res,
                  sr.residuals.mult = TRUE, maxF = 5)[]
+### add process noise
+stock.n(stk_int) <- stock.n(stk_int) * proc_res
 
 ### create stock for MSE simulation
 stk_fwd <- stk_stf
@@ -518,7 +545,7 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
 set.seed(2)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
 catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
-                            log = uncertainty$catch_sd)
+                            sd = uncertainty$catch_sd)
 ### the catch_res values are on a normale scale,
 ### exponentiate to get log-normal 
 catch_res <- exp(catch_res)
@@ -563,6 +590,8 @@ saveRDS(sr_res, file = "input/cod4/sr_res.rds")
 saveRDS(idx, file = "input/cod4/idx.rds")
 ### catch noise
 saveRDS(catch_res, file = "input/cod4/catch_res.rds")
+### process error
+saveRDS(proc_res, file = "input/cod4/proc_res.rds")
 
 ### ------------------------------------------------------------------------ ###
 ### prepare objects for new a4a standard mse package ####
