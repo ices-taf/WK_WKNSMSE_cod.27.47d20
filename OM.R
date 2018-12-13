@@ -300,11 +300,79 @@ as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   geom_line(aes(x = SSB, y = fitted, group = iter)) +
   theme_bw() + xlim(0, NA) + ylim(0, NA)
 
-# Check extent of autocorrelation
+### Check extent of autocorrelation
 # Not significant, so no need to account for it in this OM
 acf(window(stock.n(stk_orig)[1], start = 1998))
 
+### Check method proposed for generating recruitment compares with past recruitment estimates
+test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
+test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
+test <- tidyr::spread(test, key = qname, value = data)
+test <- test[complete.cases(test),]
+test$res <- rep(NA, nrow(test))
 
+# Generate residuals for future recruitments
+foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
+        .errorhandling = "pass") %do% {
+          
+          set.seed(iter_i)
+          
+          ### get residuals for current iteration
+          res_i <- c(FLCore::iter(residuals(sr), iter_i))
+          res_i <- res_i[!is.na(res_i)]
+          
+          ### calculate kernel density of residuals
+          density <- density(x = res_i)
+          ### sample residuals
+          mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
+          ### "smooth", i.e. sample from density distribution
+          test$res[test$iter==iter_i] <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
+          
+        }
+
+# Generate future recruitments from past SSBs and generated residuals
+test$future <- test$fitted * exp(test$res)
+
+# 10 randomly selected iters for plotting
+# should probably increase the number later
+i_samp <- sample(seq(dim(sr)[6]), 10, replace=FALSE)
+
+# Plot past and future stock recruit pairs for selected iters
+ggplot(test[is.element(test$iter, i_samp),]) +
+  geom_point(aes(x = SSB, y = rec), 
+             alpha = 0.5, colour = "red", shape = 19) +
+  geom_point(aes(x = SSB, y = future), 
+             alpha = 0.5, colour = "black", shape = 19) +
+  geom_line(aes(x = SSB, y = fitted)) +
+  facet_wrap(~iter) +
+  theme_bw() + xlim(0, NA) + ylim(0, NA)
+
+# Empirical cumulative distributions for the same iters
+ggplot(test[is.element(test$iter, i_samp),]) +
+  stat_ecdf(aes(rec), geom = "step", colour = "red") +
+  stat_ecdf(aes(future), geom = "step", colour = "black") +
+  facet_wrap(~iter) +
+  theme_bw() + xlim(0, NA) + ylim(0, NA)
+
+# Combine previous two plots over iters
+# Stock recruit pairs
+ggplot(test[is.element(test$iter, i_samp),]) +
+  geom_point(aes(x = SSB, y = rec), 
+             alpha = 0.5, colour = "red", shape = 19) +
+  geom_point(aes(x = SSB, y = future), 
+             alpha = 0.5, colour = "black", shape = 19) +
+  theme_bw() + xlim(0, NA) + ylim(0, NA)
+
+# Empirical cumulative distribution
+ggplot(test[is.element(test$iter, i_samp),]) +
+  stat_ecdf(aes(rec), geom = "step", colour = "red") +
+  stat_ecdf(aes(future), geom = "step", colour = "black") +
+  theme_bw() + xlim(0, NA) + ylim(0, NA)
+
+rm(test, i_samp)
+
+
+### generate residuals for MSE
 ### years with missing residuals
 # NW: dimnames produces NULL for me
 # yrs_res <- dimnames(sr)$year[which(is.na(iterMeans(rec(sr))))]
