@@ -884,8 +884,16 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### ---------------------------------------------------------------------- ###
   ### stock.n uncertainty ####
   ### ---------------------------------------------------------------------- ###
+  ### process error
   
-  # idx_SdLogN <- fit$conf$keyLogFsta
+  ### get index for ages
+  idx_SdLogN <- fit$conf$keyVarLogN + 1
+  
+  ### FLQuant template
+  SdLogN <- catch_sd %=% NA_integer_
+  
+  ### fill
+  SdLogN[] <- exp(t(dat[, colnames(dat) == "logSdLogN"][, idx_SdLogN]))
   
   ### ---------------------------------------------------------------------- ###
   ### 
@@ -897,7 +905,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   return(list(stock.n = stock.n, harvest = harvest,
               survey_catchability = catchability, catch_sd = catch_sd,
-              survey_sd = survey_sd))
+              survey_sd = survey_sd, proc_error = SdLogN))
   
 }
 
