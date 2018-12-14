@@ -251,6 +251,8 @@ stk_stf <- stk_stf2018
 # this is the approach used in eqsim for North Sea cod
 set.seed(1)
 r.bio <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
+# Do the same for selectivity pattern
+r.sel <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
 
 # loop to fill in replicates
 # can probably be coded more elegantly than this!
@@ -258,19 +260,21 @@ for (iter in 1:n) {
   
   # 2018 weights and natural mortality are averages in the assessment
   # so use a resampled value for 2018
-  catch.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- catch.wt(stk)[, ac(r.bio[,iter]),,,,1]
-  discards.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- discards.wt(stk)[, ac(r.bio[,iter]),,,,1]
-  landings.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- landings.wt(stk)[, ac(r.bio[,iter]),,,,1]
-  stock.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- stock.wt(stk)[, ac(r.bio[,iter]),,,,1]
-  m(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- m(stk)[, ac(r.bio[,iter]),,,,1]
+  catch.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- catch.wt(stk)[, ac(r.bio[,iter]),,,,iter]
+  discards.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- discards.wt(stk)[, ac(r.bio[,iter]),,,,iter]
+  landings.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- landings.wt(stk)[, ac(r.bio[,iter]),,,,iter]
+  stock.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- stock.wt(stk)[, ac(r.bio[,iter]),,,,iter]
+  m(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- m(stk)[, ac(r.bio[,iter]),,,,iter]
   
   # 2018 maturiy is based on actual data, so use this value for 2018
   # and resample from 2019 onwards
-  mat(stk_stf)[, ac(2019:(2018 + n_years)),,,,iter] <- mat(stk)[, ac(r.bio[2:nrow(r.bio),iter]),,,,1]
+  mat(stk_stf)[, ac(2019:(2018 + n_years)),,,,iter] <- mat(stk)[, ac(r.bio[2:nrow(r.bio),iter]),,,,iter]
+  
+  # Fill in harvest to set the selectivity pattern
+  # This will be rescaled to the level consistent with forecasted catch when projecting forward
+  harvest(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- harvest(stk)[, ac(r.sel[,iter]),,,,iter]
+  
 }
-
-# This may get overwritten later, but usual approach is to assume last data year F in intermediate year
-harvest(stk_stf)[, ac(2018)] <- harvest(stk)[, ac(2017)]
 
 plot(stk_stf)
 
