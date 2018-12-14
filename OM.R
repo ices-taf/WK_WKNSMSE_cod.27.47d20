@@ -448,6 +448,7 @@ stk_int[] <- fwd(stk_stf, ctrl = ctrl, sr = sr, sr.residuals = sr_res,
                  sr.residuals.mult = TRUE, maxF = 5)[]
 ### add process noise
 stock.n(stk_int) <- stock.n(stk_int) * proc_res
+stock(stk_int)[] <- computeStock(stk_int)
 
 ### create stock for MSE simulation
 stk_fwd <- stk_stf
@@ -456,6 +457,7 @@ stk_fwd[, ac(2018)] <- stk_int[, ac(2018)]
 ### insert stock number for 2019 in order to calculate SSB at beginning of 
 ### 2019
 stock.n(stk_fwd)[, ac(2019)] <- stock.n(stk_int)[, ac(2019)]
+stock(stk_fwd)[, ac(2019)] <- computeStock(stk_fwd[, ac(2019)])
 
 #all.equal(window(stk_fwd, end = 2018), window(stk_stf, end = 2018))
 
