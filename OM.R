@@ -639,6 +639,9 @@ oem <- FLoem(method = oem_WKNSMSE,
                          catch_timing = -1,
                          use_catch_residuals = TRUE, 
                          use_idx_residuals = TRUE))
+### implementation error model (banking and borrowing)
+iem <- FLiem(method = iem_WKNSMSE, 
+             args = list(BB = TRUE))
 
 ### default management
 ctrl_obj <- mpCtrl(list(
@@ -662,15 +665,15 @@ ctrl_obj <- mpCtrl(list(
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
-                             cod4_stf_def#,
+                             cod4_stf_def,
                              ### TAC constraint
-                             #TAC_constraint = TRUE,
-                             #lower = -Inf, upper = Inf,
-                             #Btrigger_cond = FALSE,
+                             TAC_constraint = TRUE,
+                             lower = -Inf, upper = Inf,
+                             Btrigger_cond = FALSE,
                              ### banking and borrowing 
-                             #BB = TRUE,
-                             #BB_conditional = TRUE,
-                             #BB_rho = list(c(-0.1, 0.1))
+                             BB = TRUE,
+                             BB_conditional = TRUE,
+                             BB_rho = list(c(-0.1, 0.1))
                     )),
   ctrl.tm = NULL
 ))
@@ -703,6 +706,7 @@ tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 ### check normal execution
 res1 <- mp(om = om,
            oem = oem,
+           iem = iem,
            ctrl.mp = ctrl_obj,
            genArgs = genArgs,
            tracking = tracking_add)

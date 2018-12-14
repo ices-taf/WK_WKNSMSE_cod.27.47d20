@@ -709,21 +709,68 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
       
     }
     
-  ### save transfers into  tracking
+    # ### correct target catch later in iem module
+    # catch_target <- catch_target - c(BB_return) +
+    #   c(BB_bank_use) - c(BB_bank) + c(BB_borrow)
+  
+  } else {
+    ### if B&B not applied, store 0 
+    BB_return <- BB_bank_use <- BB_bank <- BB_borrow <- 0
+    
+  }
+  
+  ### save B&B transfers in  tracking
   tracking["BB_return", ac(ay)] <- BB_return
   tracking["BB_bank_use", ac(ay)] <- BB_bank_use
   tracking["BB_bank", ac(ay)] <- BB_bank
   tracking["BB_borrow", ac(ay)] <- BB_borrow
   
-  ### correct target catch
-  catch_target <- catch_target - c(BB_return) +
-    c(BB_bank_use) - c(BB_bank) + c(BB_borrow)
-  
   ### create ctrl object
   ctrl <- getCtrl(values = catch_target, quantity = "catch", 
                   years = ctrl@target$year, it = it)
   
+  ### return catch target and tracking
+  return(list(ctrl = ctrl, tracking = tracking))
   
+}
+
+### ------------------------------------------------------------------------ ###
+### implementation error: banking and borrowing ####
+### ------------------------------------------------------------------------ ###
+### so far only banking and borrowing (B&B) implemented
+
+iem_WKNSMSE <- function(tracking, ctrl,
+                        genArgs, ### contains ay (assessment year)
+                        BB = FALSE, ### apply banking and borrowing
+                       ...) {
+  
+  if (isTRUE(BB)) {
+    
+    ### get current (assessment) year
+    ay <- genArgs$ay
+    
+    ### retrieve banking and borrowing values
+    BB_return <- tracking["BB_return", ac(ay)]
+    BB_bank_use <- tracking["BB_bank_use", ac(ay)]
+    BB_bank <- tracking["BB_bank", ac(ay)]
+    BB_borrow <- tracking["BB_borrow", ac(ay)]
+    
+    ### replace NAs with 0
+    BB_return <- ifelse(!is.na(BB_return), BB_return, 0)
+    BB_bank_use <- ifelse(!is.na(BB_bank_use), BB_bank_use, 0)
+    BB_bank <- ifelse(!is.na(BB_bank), BB_bank, 0)
+    BB_borrow <- ifelse(!is.na(BB_borrow), BB_borrow, 0)
+    
+    ### get catch target(s)
+    catch_target <- ctrl@trgtArray[, "val", ]
+    
+    ### implement B&B
+    catch_target <- catch_target - c(BB_return) + c(BB_bank_use) - 
+      c(BB_bank) + c(BB_borrow)
+    
+    ### save in ctrl object
+    ctrl@trgtArray[, "val", ] <- catch_target
+    
   }
   
   ### return catch target and tracking
