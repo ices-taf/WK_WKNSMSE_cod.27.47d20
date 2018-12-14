@@ -133,8 +133,13 @@ harvest(stk)[] <- uncertainty$harvest
 
 ### catch noise added later
 
-
 plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+### maximum observed F
+max(fbar(stk))
+# 1.136172 in 2000
+max(harvest(stk))
+# 1.269115 in 1996 for age 3
 
 ### ------------------------------------------------------------------------ ###
 ### check MCMC approach ####
@@ -631,7 +636,12 @@ genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
 
 ### operating model
 om <- FLom(stock = stk_fwd, ### stock 
-           sr = sr ### stock recruitment and precompiled residuals
+           sr = sr, ### stock recruitment and precompiled residuals
+           projection = mseCtrl(method = fwd_WKNSMSE, 
+                                args = list(maxF = 2,
+                                            ### process noise on stock.n
+                                            proc_res = proc_res
+                                ))
 )
 
 ### observation (error) model

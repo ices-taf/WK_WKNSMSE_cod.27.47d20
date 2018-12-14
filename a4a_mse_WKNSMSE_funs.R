@@ -779,6 +779,46 @@ iem_WKNSMSE <- function(tracking, ctrl,
 }
 
 ### ------------------------------------------------------------------------ ###
+### forward projection ####
+### ------------------------------------------------------------------------ ###
+### including process error on stock.n
+### implemented by simply multiplying numbers at age from fwd with noise factor
+
+fwd_WKNSMSE <- function(stk, ctrl,
+                        sr, ### stock recruitment model
+                        sr.residuals, ### recruitment residuals
+                        sr.residuals.mult = TRUE, ### are res multiplicative?
+                        maxF = 2, ### maximum allowed Fbar
+                        proc_res = NULL, ### process error noise
+                        ...) {
+  
+  ### project forward with FLash::fwd
+  stk[] <- fwd(object = stk, control = ctrl, sr = sr, 
+               sr.residuals = sr.residuals, 
+               sr.residuals.mult = sr.residuals.mult,
+               maxF = maxF)
+  
+  ### add process error noise, if supplied
+  if (!is.null(proc_res)) {
+    
+    ### projected years
+    yrs_new <- seq(from = ctrl@target[, "year"], to = range(stk)[["maxyear"]])
+    
+    ### implement process error
+    stock.n(stk)[, ac(yrs_new)] <- stock.n(stk)[, ac(yrs_new)] *
+      proc_res[, ac(yrs_new)]
+    ### update stock biomass
+    stock(stk) <- computeStock(stk)
+    
+  }
+  
+  ### return stock
+  return(list(object = stk))
+  
+}
+
+
+### ------------------------------------------------------------------------ ###
 ### extract uncertainty from SAM object ####
 ### ------------------------------------------------------------------------ ###
 ### function for creating iterations based on estimation of uncertainty in SAM
