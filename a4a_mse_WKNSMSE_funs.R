@@ -103,13 +103,31 @@ oem_WKNSMSE <- function(stk,
                         idx_timing = -1, ### index timing relative to ay
                         use_catch_residuals = FALSE, ### use residuals for
                         use_idx_residuals = FALSE,   ### observations
+                        use_stk_oem = FALSE, ### biological parameters, wts etc
                         ...) {
   #browser()
   ### current (assessment) year
   ay <- genArgs$ay
   
   ### create object for observed stock
-  stk0 <- stk
+  if (!isTRUE(use_stk_oem)) {
+  
+    ### use OM as template
+    stk0 <- stk
+    
+  } else {
+    ### otherwise use observed stock provided in observations object
+    ### this can include different biological data, e.g. weights at age
+    stk0 <- observations$stk
+    ### update fishery data
+    catch.n(stk0) <- catch.n(stk)
+    catch(stk0) <- catch(stk)
+    discards.n(stk0) <- discards.n(stk)
+    discards(stk0) <- discards(stk)
+    landings.n(stk0) <- landings.n(stk)
+    landings(stk0) <- landings(stk)
+    
+  }
   
   ### add uncertainty to catch
   if (isTRUE(use_catch_residuals)) {

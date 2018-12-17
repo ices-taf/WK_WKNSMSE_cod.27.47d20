@@ -250,14 +250,20 @@ stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### use all available data
 stk_stf <- stk_stf2018
 
+### ------------------------------------------------------------------------ ###
+### biological data for OM ####
+### ------------------------------------------------------------------------ ###
+
 ### Resample weights, maturity and natural mortality from the last 5 years (2013-2017)
 # set up an array with one resampled year for each projection year (including intermediate year) and replicate
 # use the same resampled year for all biological parameters
 # this is the approach used in eqsim for North Sea cod
 set.seed(1)
-r.bio <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
+### use last five data years to sample biological parameters
+sample_yrs <- 2013:2017
+r.bio <- array(sample(sample_yrs, (n_years + 1) * n, TRUE), c(n_years + 1, n))
 # Do the same for selectivity pattern
-r.sel <- array(sample(2013:2017, (n_years + 1) * n, TRUE), c(n_years + 1, n))
+r.sel <- array(sample(sample_yrs, (n_years + 1) * n, TRUE), c(n_years + 1, n))
 
 # loop to fill in replicates
 # can probably be coded more elegantly than this!
@@ -471,6 +477,33 @@ stock(stk_fwd)[, ac(2019)] <- computeStock(stk_fwd[, ac(2019)])
 #all.equal(window(stk_fwd, end = 2018), window(stk_stf, end = 2018))
 
 ### ------------------------------------------------------------------------ ###
+### biological data for OEM ####
+### ------------------------------------------------------------------------ ###
+
+### base on OM stock
+stk_oem <- stk_fwd
+
+### projection years
+proj_yrs <- 2018:range(stk_oem)[["maxyear"]]
+
+### use means of sampled values for projection period
+catch.wt(stk_oem)[, ac(proj_yrs)] <- 
+  yearMeans(catch.wt(stk_oem)[, ac(sample_yrs)])
+landings.wt(stk_oem)[, ac(proj_yrs)] <- 
+  yearMeans(landings.wt(stk_oem)[, ac(sample_yrs)])
+discards.wt(stk_oem)[, ac(proj_yrs)] <- 
+  yearMeans(discards.wt(stk_oem)[, ac(sample_yrs)])
+stock.wt(stk_oem)[, ac(proj_yrs)] <- 
+  yearMeans(stock.wt(stk_oem)[, ac(sample_yrs)])
+m(stk_oem)[, ac(proj_yrs)] <- yearMeans(m(stk_oem)[, ac(sample_yrs)])
+### maturity starts one year later because there is data for 2018
+mat(stk_oem)[, ac(proj_yrs[-1])] <- yearMeans(mat(stk_oem)[, ac(sample_yrs)])
+
+### remove stock assessment results
+stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
+
+
+### ------------------------------------------------------------------------ ###
 ### indices ####
 ### ------------------------------------------------------------------------ ###
 ### use real FLIndices object as template (included in FLfse)
@@ -603,6 +636,8 @@ saveRDS(idx, file = "input/cod4/idx.rds")
 saveRDS(catch_res, file = "input/cod4/catch_res.rds")
 ### process error
 saveRDS(proc_res, file = "input/cod4/proc_res.rds")
+### observed stock
+saveRDS(stk_oem, file = "input/cod4/stk_oem.rds")
 
 ### ------------------------------------------------------------------------ ###
 ### prepare objects for new a4a standard mse package ####
@@ -626,7 +661,7 @@ cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_splitLD = TRUE)
 
 ### some arguments (passed to mp())
-genArgs <- list(fy = yr_data + n_years - 1, ### final simulation year
+genArgs <- list(fy = yr_data + n_years, ### final simulation year
                 y0 = yr_data, ### first simulation year
                 iy = yr_data,
                 nsqy = 3, ### not used, but has to provided
@@ -646,13 +681,14 @@ om <- FLom(stock = stk_fwd, ### stock
 
 ### observation (error) model
 oem <- FLoem(method = oem_WKNSMSE,
-             observations = list(stk = stk_fwd, idx = idx), 
+             observations = list(stk = stk_oem, idx = idx), 
              deviances = list(stk = FLQuants(catch.dev = catch_res), 
                               idx = idx_dev),
              args = list(idx_timing = c(0, -1),
                          catch_timing = -1,
                          use_catch_residuals = TRUE, 
-                         use_idx_residuals = TRUE))
+                         use_idx_residuals = TRUE,
+                         use_stk_oem = TRUE))
 ### implementation error model (banking and borrowing)
 iem <- FLiem(method = iem_WKNSMSE, 
              args = list(BB = TRUE))
@@ -727,6 +763,7 @@ res1 <- mp(om = om,
 ### check mpParallel function
 resp1 <- mpParallel(om = om,
                     oem = oem,
+                    iem = iem,
                     ctrl.mp = ctrl_obj,
                     genArgs = genArgs,
                     tracking = tracking_add)
