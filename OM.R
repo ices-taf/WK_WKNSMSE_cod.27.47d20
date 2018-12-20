@@ -253,39 +253,41 @@ stk_stf <- stk_stf2018
 ### ------------------------------------------------------------------------ ###
 ### biological data for OM ####
 ### ------------------------------------------------------------------------ ###
-
-### Resample weights, maturity and natural mortality from the last 5 years (2013-2017)
-# set up an array with one resampled year for each projection year (including intermediate year) and replicate
-# use the same resampled year for all biological parameters
-# this is the approach used in eqsim for North Sea cod
+### Resample weights, maturity and natural mortality from the last 5 years 
+### (2013-2017)
+### set up an array with one resampled year for each projection year 
+### (including intermediate year) and replicate
+### use the same resampled year for all biological parameters
+### this is the approach used in eqsim for North Sea cod
 set.seed(1)
+
 ### use last five data years to sample biological parameters
 sample_yrs <- 2013:2017
-r.bio <- array(sample(sample_yrs, (n_years + 1) * n, TRUE), c(n_years + 1, n))
-# Do the same for selectivity pattern
-r.sel <- array(sample(sample_yrs, (n_years + 1) * n, TRUE), c(n_years + 1, n))
+### get year position of sample years
+sample_yrs_pos <- which(dimnames(stk_stf)$year %in% sample_yrs)
 
-# loop to fill in replicates
-# can probably be coded more elegantly than this!
-for (iter in 1:n) {
-  
-  # 2018 weights and natural mortality are averages in the assessment
-  # so use a resampled value for 2018
-  catch.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- catch.wt(stk)[, ac(r.bio[,iter]),,,,iter]
-  discards.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- discards.wt(stk)[, ac(r.bio[,iter]),,,,iter]
-  landings.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- landings.wt(stk)[, ac(r.bio[,iter]),,,,iter]
-  stock.wt(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- stock.wt(stk)[, ac(r.bio[,iter]),,,,iter]
-  m(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- m(stk)[, ac(r.bio[,iter]),,,,iter]
-  
-  # 2018 maturiy is based on actual data, so use this value for 2018
-  # and resample from 2019 onwards
-  mat(stk_stf)[, ac(2019:(2018 + n_years)),,,,iter] <- mat(stk)[, ac(r.bio[2:nrow(r.bio),iter]),,,,iter]
-  
-  # Fill in harvest to set the selectivity pattern
-  # This will be rescaled to the level consistent with forecasted catch when projecting forward
-  harvest(stk_stf)[, ac(2018:(2018 + n_years)),,,,iter] <- harvest(stk)[, ac(r.sel[,iter]),,,,iter]
-  
-}
+### create samples for biological data (weights, etc.)
+### the historical biological parameters are identical for all iterations
+### and consequently do not need to be treated individually
+### (but keep age structure)
+### create vector with resampled years
+bio_samples <- sample(x = sample_yrs_pos, 
+                      size = (n_years + 1) * n, replace = TRUE)
+### do the same for selectivity
+sel_samples <- sample(x = sample_yrs_pos, 
+                      size = (n_years + 1) * n, replace = TRUE)
+
+### insert values
+catch.wt(stk_stf)[, bio_yrs] <- c(catch.wt(stk)[, bio_samples,,,, 1])
+stock.wt(stk_stf)[, bio_yrs] <- c(stock.wt(stk)[, bio_samples,,,, 1])
+landings.wt(stk_stf)[, bio_yrs] <- c(landings.wt(stk)[, bio_samples,,,, 1])
+discards.wt(stk_stf)[, bio_yrs] <- c(discards.wt(stk)[, bio_samples,,,, 1])
+m(stk_stf)[, bio_yrs] <- c(m(stk)[, bio_samples,,,, 1])
+mat(stk_stf)[, bio_yrs] <- c(mat(stk)[, bio_samples,,,, 1])
+### maturity data for 2018 exists, re-insert real data
+mat(stk_stf)[, ac(2018)] <- mat(stk_orig)[, ac(2018)]
+### use different samples for selectivity
+harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
 
 plot(stk_stf)
 
