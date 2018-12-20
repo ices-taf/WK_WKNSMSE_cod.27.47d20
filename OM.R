@@ -276,6 +276,9 @@ bio_samples <- sample(x = sample_yrs_pos,
 ### do the same for selectivity
 sel_samples <- sample(x = sample_yrs_pos, 
                       size = (n_years + 1) * n, replace = TRUE)
+### years to be populated
+bio_yrs <- which(dimnames(stk_stf)$year %in% 2018:dims(stk_stf)$maxyear)
+
 
 ### insert values
 catch.wt(stk_stf)[, bio_yrs] <- c(catch.wt(stk)[, bio_samples,,,, 1])
