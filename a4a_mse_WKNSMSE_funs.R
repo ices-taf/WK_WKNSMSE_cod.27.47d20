@@ -1051,3 +1051,67 @@ sam_getpar <- function(fit) {
 }
 
 
+### ------------------------------------------------------------------------ ###
+### run fmle for FLSR in parallel ####
+### ------------------------------------------------------------------------ ###
+
+fmle_parallel <- function(sr, cl, seed = NULL) {
+  
+  ### split into parts
+  it_parts <- split(1:dim(sr)[6], cut(1:dim(sr)[6], length(cl)))
+  names(it_parts) <- NULL
+  
+  ### split sr into junks
+  sr_chunks <- lapply(it_parts, function(x) {
+    FLCore::iter(sr, x)
+  })
+  
+  ### set RNG seed
+  if (!is.null(seed)) {
+    clusterEvalQ(cl = cl, expr = {set.seed(seed)})
+  }
+  
+  ### fit model to each junk
+  fits <- foreach(sr_chunk = sr_chunks, .packages = "FLCore") %dopar% {
+    
+    fmle(sr_chunk)
+    
+  }
+  
+  ### combine into single object
+  ### slots rec, ssb, covar, logerrror, model, logl, gr, distribution, inital,
+  ### name, desc, range
+  ### do not need to be changed
+  logLik(sr) <- logLik(fits[[1]])
+  sr@logLik[seq(dims(sr)$iter)] <- c(sapply(fits, logLik))
+  
+  fitted(sr) <- do.call(FLCore::combine, lapply(fits, "fitted"))
+  
+  residuals(sr) <- do.call(FLCore::combine, lapply(fits, "residuals"))
+  
+  vcov(sr) <- array(data = unlist(lapply(fits, vcov)), 
+                    dim = c(dim(fits[[1]]@vcov)[1], 
+                            dim(fits[[1]]@vcov)[2], 
+                            dims(sr)$iter), 
+                    dimnames = list(dimnames(fits[[1]]@vcov)[[1]], 
+                                    dimnames(fits[[1]]@vcov)[[2]], 
+                                    iter = ac(dimnames(sr)$iter)))
+  
+  params(sr) <- propagate(params(sr), dims(sr)$iter)
+  params(sr)[] <- unlist(lapply(fits, function(x) {
+    split(x@params@.Data, slice.index(x@params, MARGIN = 2))
+  }))
+  
+  hessian(sr) <- array(data = unlist(lapply(fits, hessian)), 
+                       dim = c(dim(fits[[1]]@hessian)[1], 
+                               dim(fits[[1]]@hessian)[2], 
+                               dims(sr)$iter), 
+                       dimnames = list(dimnames(fits[[1]]@hessian)[[1]], 
+                                       dimnames(fits[[1]]@hessian)[[2]], 
+                                       iter = ac(dimnames(sr)$iter)))
+
+  details(sr) <- details(fits[[1]])
+  
+  return(sr)
+  
+}

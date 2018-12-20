@@ -304,6 +304,11 @@ plot(stk_stf)
 sr <- as.FLSR(window(stk_stf, start = 1997), model = "segreg")
 ### fit model individually to each iteration and suppress output to screen
 suppressWarnings(. <- capture.output(sr <- fmle(sr)))
+### run in parallel
+# library(doParallel)
+# cl <- makeCluster(10)
+# registerDoParallel(cl)
+# sr <- fmle_parallel(sr, cl)
 
 plot(sr)
 ### check breakpoints
@@ -739,22 +744,6 @@ tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 # library(doParallel)
 # cl <- makeCluster(10)
 # registerDoParallel(cl)
-# debugonce(mp)
-# debugonce(is_WKNSMSE)
-# res1 <- mp(om = om,
-#            oem = oem,
-#            ctrl.mp = ctrl_obj,
-#            genArgs = genArgs,
-#            tracking = tracking_add)
-
-# ### without BB
-# ctrl_obj2 <- ctrl_obj
-# ctrl_obj2$ctrl.is@args$BB <- FALSE
-# res2 <- mp(om = om,
-#            oem = oem,
-#            ctrl.mp = ctrl_obj2,
-#            genArgs = genArgs,
-#            tracking = tracking_add)
 
 ### run MSE
 ### WARNING: takes a while...
@@ -766,54 +755,54 @@ res1 <- mp(om = om,
            genArgs = genArgs,
            tracking = tracking_add)
 ### check mpParallel function
-resp1 <- mpParallel(om = om,
-                    oem = oem,
-                    iem = iem,
-                    ctrl.mp = ctrl_obj,
-                    genArgs = genArgs,
-                    tracking = tracking_add)
-
-### split into 2 parts
-genArgs$nblocks <- 2
-resp2 <- mpParallel(om = om,
-                    oem = oem,
-                    ctrl.mp = ctrl_obj,
-                    genArgs = genArgs,
-                    tracking = tracking_add)
-### execute in parallel
-library(doParallel)
-cl <- makeCluster(2)
-registerDoParallel(cl)
-### load packages and additional functions into workers
-clusterEvalQ(cl = cl, expr = {
-  library(mse)
-  library(FLash)
-  library(FLfse)
-  library(stockassessment)
-  library(foreach)
-  library(doRNG)
-  source("a4a_mse_WKNSMSE_funs.R")
-})
-### run MSE
-resp3 <- mpParallel(om = om,
-                    oem = oem,
-                    ctrl.mp = ctrl_obj,
-                    genArgs = genArgs,
-                    tracking = tracking_add)
-### try reproducible parallel execution
-library(doRNG)
-registerDoRNG(123) 
-resp4 <- mpParallel(om = om,
-                    oem = oem,
-                    ctrl.mp = ctrl_obj,
-                    genArgs = genArgs,
-                    tracking = tracking_add)
-registerDoRNG(123) 
-resp5 <- mpParallel(om = om,
-                    oem = oem,
-                    ctrl.mp = ctrl_obj,
-                    genArgs = genArgs,
-                    tracking = tracking_add)
+# resp1 <- mpParallel(om = om,
+#                     oem = oem,
+#                     iem = iem,
+#                     ctrl.mp = ctrl_obj,
+#                     genArgs = genArgs,
+#                     tracking = tracking_add)
+# 
+# ### split into 2 parts
+# genArgs$nblocks <- 2
+# resp2 <- mpParallel(om = om,
+#                     oem = oem,
+#                     ctrl.mp = ctrl_obj,
+#                     genArgs = genArgs,
+#                     tracking = tracking_add)
+# ### execute in parallel
+# library(doParallel)
+# cl <- makeCluster(2)
+# registerDoParallel(cl)
+# ### load packages and additional functions into workers
+# clusterEvalQ(cl = cl, expr = {
+#   library(mse)
+#   library(FLash)
+#   library(FLfse)
+#   library(stockassessment)
+#   library(foreach)
+#   library(doRNG)
+#   source("a4a_mse_WKNSMSE_funs.R")
+# })
+# ### run MSE
+# resp3 <- mpParallel(om = om,
+#                     oem = oem,
+#                     ctrl.mp = ctrl_obj,
+#                     genArgs = genArgs,
+#                     tracking = tracking_add)
+# ### try reproducible parallel execution
+# library(doRNG)
+# registerDoRNG(123) 
+# resp4 <- mpParallel(om = om,
+#                     oem = oem,
+#                     ctrl.mp = ctrl_obj,
+#                     genArgs = genArgs,
+#                     tracking = tracking_add)
+# registerDoRNG(123) 
+# resp5 <- mpParallel(om = om,
+#                     oem = oem,
+#                     ctrl.mp = ctrl_obj,
+#                     genArgs = genArgs,
+#                     tracking = tracking_add)
 
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
