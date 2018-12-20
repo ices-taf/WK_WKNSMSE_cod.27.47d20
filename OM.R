@@ -3,8 +3,19 @@
 ### ------------------------------------------------------------------------ ###
 ### base on SAM assessment
 
+### check versions of required R packages
+if (packageVersion("FLCore") < "2.6.11.9001") 
+  stop("please update FLCore")
+if (packageVersion("FLfse") < "0.0.0.9003") 
+  stop("please update FLfse")
+if (packageVersion("stockassessment") < "0.8.1") 
+  stop("please update stockassessment")
+if (packageVersion("mse") < "0.9.1") 
+  stop("please update stockassessment")
+
 ### load packages
 library(FLfse)
+library(stockassessment)
 library(ggplotFL)
 library(FLAssess)
 # library(mse)
@@ -14,13 +25,10 @@ library(FLash)
 library(tidyr)
 library(dplyr)
 
-### source the scripts from functions folder
-# invisible(lapply(list.files(path = "functions/", pattern = "*.R$", 
-#                             full.names = TRUE), source))
 source("a4a_mse_WKNSMSE_funs.R")
 
 dir.create(path = "input/cod4", recursive = TRUE)
-dir.create(path = "output/runs", recursive = TRUE)
+dir.create(path = "output/runs/cod4", recursive = TRUE)
 
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
