@@ -123,7 +123,7 @@ stk <- FLCore::propagate(stk, n)
 dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
-set.seed(2)
+set.seed(1)
 uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
@@ -137,9 +137,9 @@ plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### maximum observed F
 max(fbar(stk))
-# 1.136172 in 2000
+# 1.359563 in year 1999 with 10,000 iterations
 max(harvest(stk))
-# 1.269115 in 1996 for age 3
+# 2.086832 in year 2001 for age 6 (plusgroup)
 
 ### ------------------------------------------------------------------------ ###
 ### check MCMC approach ####
@@ -243,8 +243,10 @@ max(harvest(stk))
 
 ### special case for NS cod
 ### maturity data available for 2018 (based on the IBTS Q1)
-### stock weights, M etc in 2018 based on a three year average to enable calculation of SSB
-### although SAM estimates F in 2018, this is not reported or taken forward into forcasts by the WG
+### stock weights, M etc in 2018 based on a three year average to enable 
+### calculation of SSB
+### although SAM estimates F in 2018, this is not reported or taken forward into
+### forcasts by the WG
 # stk_stf2017 <- stf(window(stk, end = 2017), n_years + 1)
 stk_stf2018 <- stf(window(stk, end = 2018), n_years)
 ### use all available data
@@ -259,7 +261,7 @@ stk_stf <- stk_stf2018
 ### (including intermediate year) and replicate
 ### use the same resampled year for all biological parameters
 ### this is the approach used in eqsim for North Sea cod
-set.seed(1)
+set.seed(2)
 
 ### use last five data years to sample biological parameters
 sample_yrs <- 2013:2017
@@ -340,7 +342,7 @@ test$res <- rep(NA, nrow(test))
 foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
         .errorhandling = "pass") %do% {
           
-          set.seed(iter_i)
+          set.seed(iter_i^2)
           
           ### get residuals for current iteration
           res_i <- c(FLCore::iter(residuals(sr), iter_i))
@@ -409,7 +411,7 @@ yrs_res <- colnames(rec(sr))[which(is.na(iterMeans(rec(sr))))]
 res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
                    .errorhandling = "pass") %do% {
                      
-  set.seed(iter_i)
+  set.seed(iter_i^3)
   
   ### get residuals for current iteration
   res_i <- c(FLCore::iter(residuals(sr), iter_i))
@@ -441,7 +443,7 @@ plot(sr_res)
 ### this will be added to the values obtained from fwd() in the MSE
 
 ### create noise for process error
-set.seed(2)
+set.seed(3)
 proc_res <- stock.n(stk_stf) %=% 0 ### template FLQuant
 proc_res[] <- stats::rnorm(n = length(proc_res), mean = 0, 
                            sd = uncertainty$proc_error)
@@ -539,7 +541,7 @@ idx <- calc_survey(stk = stk_fwd, idx = idx)
 ### first, get template
 idx_dev <- lapply(idx, index)
 ### create random noise based on sd
-set.seed(2)
+set.seed(4)
 for (idx_i in seq_along(idx_dev)) {
   ### insert sd
   idx_dev[[idx_i]][] <- uncertainty$survey_sd[[idx_i]]
@@ -596,7 +598,7 @@ as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
 ### around operating model catch
 
 ### create noise for catch
-set.seed(2)
+set.seed(5)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
 catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
                             sd = uncertainty$catch_sd)
