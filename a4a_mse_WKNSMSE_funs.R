@@ -888,6 +888,9 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   #dat <- rbind(est, sim.states)
   dat <- sim.states
   
+  ### workaround if only one iteration/replicate
+  if (!is.matrix(dat)) dat <- t(as.matrix(dat))
+  
   ### ---------------------------------------------------------------------- ###
   ### stock ####
   ### ---------------------------------------------------------------------- ###
@@ -940,7 +943,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
                                    year = "all", iter = 1:n))
     ### fill with catchability values
-    tmp[] <- exp(t(dat[, colnames(dat) == "logFpar"][, idx_LogFpar[[x]]]))
+    tmp[] <- 
+      exp(t(dat[, colnames(dat) == "logFpar", drop = FALSE][, idx_LogFpar[[x]]]))
     
     return(tmp)
     
@@ -960,7 +964,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   catch_sd_idx <- idxObs[1, ][idxObs[1, ] > -1] + 1
   
   ### extract values
-  catch_sd[] <- exp(t(dat[, colnames(dat) == "logSdLogObs"][, catch_sd_idx]))
+  catch_sd[] <- 
+    exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, catch_sd_idx]))
   ### logSdLogObs is the log of the SD of the log observations
   ### exponentiate values here to get SD (and not logSD)
   
@@ -980,7 +985,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     idx_sd <- idx_sd[idx_sd > -1] + 1
     
     ### fill with catchability values
-    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs"][, idx_sd]))
+    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, idx_sd]))
     
     return(tmp)
     
@@ -998,7 +1003,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   SdLogN <- catch_sd %=% NA_integer_
   
   ### fill
-  SdLogN[] <- exp(t(dat[, colnames(dat) == "logSdLogN"][, idx_SdLogN]))
+  SdLogN[] <- 
+    exp(t(dat[, colnames(dat) == "logSdLogN", drop = FALSE][, idx_SdLogN]))
   
   ### ---------------------------------------------------------------------- ###
   ### 
