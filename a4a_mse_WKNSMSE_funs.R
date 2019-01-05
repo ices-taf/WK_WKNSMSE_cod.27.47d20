@@ -822,11 +822,21 @@ fwd_WKNSMSE <- function(stk, ctrl,
     ### projected years
     yrs_new <- seq(from = ctrl@target[, "year"], to = range(stk)[["maxyear"]])
     
-    ### implement process error
-    stock.n(stk)[, ac(yrs_new)] <- stock.n(stk)[, ac(yrs_new)] *
-      proc_res[, ac(yrs_new)]
-    ### update stock biomass
-    stock(stk) <- computeStock(stk)
+    ### workaround to get residuals
+    ### they are saved in the "fitted" slot of sr...
+    if (!isTRUE(proc_res == "fitted")) {
+      
+      stop("survival process error inacessible")
+    
+    } else {
+    
+      ### implement process error
+      stock.n(stk)[, ac(yrs_new)] <- stock.n(stk)[, ac(yrs_new)] *
+        fitted(sr)[, ac(yrs_new)]
+      ### update stock biomass
+      stock(stk) <- computeStock(stk)
+      
+    }
     
   }
   

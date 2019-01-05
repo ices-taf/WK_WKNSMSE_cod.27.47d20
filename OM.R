@@ -417,9 +417,9 @@ yrs_res <- colnames(rec(sr))[which(is.na(iterMeans(rec(sr))))]
 ### use kernel density to create smooth distribution of residuals
 ### and sample from this distribution
 res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
-                   .errorhandling = "pass") %do% {
+                   .errorhandling = "pass") %dopar% {
                      
-  set.seed(iter_i^3)
+  set.seed(iter_i)
   
   ### get residuals for current iteration
   res_i <- c(FLCore::iter(residuals(sr), iter_i))
@@ -467,7 +467,11 @@ proc_res[, dimnames(proc_res)$year <= 2017] <- 1
 ### remove deviation for first age class (recruits)
 proc_res[1, ] <- 1
 
-plot(proc_res)
+### try saving in stock recruitment model ... 
+### this gets passed on to the projection module
+fitted(sr) <- proc_res
+
+if (isTRUE(verbose)) plot(proc_res)
 
 
 ### ------------------------------------------------------------------------ ###
@@ -644,20 +648,29 @@ plot(catch_res)
 ### save OM ####
 ### ------------------------------------------------------------------------ ###
 
+### path
+input_path <- paste0("input/cod4/", n, "_", n_years, "/")
+dir.create(input_path)
 ### stock
-saveRDS(stk_fwd, file = "input/cod4/stk.rds")
+saveRDS(stk_fwd, file = paste0(input_path, "stk.rds"))
 ### stock recruitment
-saveRDS(sr, file = "input/cod4/sr.rds")
+saveRDS(sr, file = paste0(input_path, "sr.rds"))
 ### recruitment residuals
-saveRDS(sr_res, file = "input/cod4/sr_res.rds")
+saveRDS(sr_res, file = paste0(input_path, "sr_res.rds"))
 ### surveys
-saveRDS(idx, file = "input/cod4/idx.rds")
+saveRDS(idx, file = paste0(input_path, "idx.rds"))
+saveRDS(idx_dev, file = paste0(input_path, "idx_dev.rds"))
 ### catch noise
-saveRDS(catch_res, file = "input/cod4/catch_res.rds")
+saveRDS(catch_res, file = paste0(input_path, "catch_res.rds"))
 ### process error
-saveRDS(proc_res, file = "input/cod4/proc_res.rds")
+saveRDS(proc_res, file = paste0(input_path, "proc_res.rds"))
 ### observed stock
-saveRDS(stk_oem, file = "input/cod4/stk_oem.rds")
+saveRDS(stk_oem, file = paste0(input_path, "stk_oem.rds"))
+### sam initial parameters
+saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
+### sam configuration
+saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
+
 
 ### ------------------------------------------------------------------------ ###
 ### prepare objects for new a4a standard mse package ####
@@ -681,9 +694,9 @@ cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_splitLD = TRUE)
 
 ### some arguments (passed to mp())
-genArgs <- list(fy = yr_data + n_years, ### final simulation year
-                y0 = yr_data, ### first simulation year
-                iy = yr_data,
+genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+                y0 = dims(stk_fwd)$minyear, ### first data year
+                iy = yr_data, ### first simulation (intermediate) year
                 nsqy = 3, ### not used, but has to provided
                 nblocks = 1, ### block for parallel processing
                 seed = 1 ### random number seed before starting MSE
@@ -695,7 +708,7 @@ om <- FLom(stock = stk_fwd, ### stock
            projection = mseCtrl(method = fwd_WKNSMSE, 
                                 args = list(maxF = 2,
                                             ### process noise on stock.n
-                                            proc_res = proc_res
+                                            proc_res = "fitted"
                                 ))
 )
 
@@ -710,8 +723,8 @@ oem <- FLoem(method = oem_WKNSMSE,
                          use_idx_residuals = TRUE,
                          use_stk_oem = TRUE))
 ### implementation error model (banking and borrowing)
-iem <- FLiem(method = iem_WKNSMSE, 
-             args = list(BB = TRUE))
+# iem <- FLiem(method = iem_WKNSMSE, 
+#              args = list(BB = TRUE))
 
 ### default management
 ctrl_obj <- mpCtrl(list(
