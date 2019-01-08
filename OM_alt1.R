@@ -35,7 +35,7 @@ dir.create(path = "output/runs/cod4_alt1", recursive = TRUE)
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations/replicates
-n <- 10
+n <- 100
 ### number of years
 n_years <- 20
 ### last data year
@@ -336,7 +336,7 @@ as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
   theme_bw() + xlim(0, NA) + ylim(0, NA)
 
 ### Check extent of autocorrelation
-# Not significant, so no need to account for it in this OM
+# Some autocorrelation
 acf(window(stock.n(stk_orig)[1], start = 1988))
 
 ### Check method proposed for generating recruitment compares with past recruitment estimates
@@ -344,7 +344,7 @@ test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
 test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
 test <- tidyr::spread(test, key = qname, value = data)
 test <- test[complete.cases(test),]
-test$res <- rep(NA, nrow(test))
+test$res <- test$rres <- rep(NA, nrow(test))
 
 # Generate residuals for future recruitments
 foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
@@ -361,7 +361,22 @@ foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore",
           ### sample residuals
           mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
           ### "smooth", i.e. sample from density distribution
-          test$res[test$iter==iter_i] <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
+          rres <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
+          
+          ### calculate serial correlation
+          res_y <- res_i[-length(res_i)]
+          res_yp1 <- res_i[-1]
+          rho <- sum(res_y * res_yp1) / sqrt(sum(res_y^2) * sum(res_yp1^2))
+          
+          ### generate autocorrelated residuals
+          res <- res_i
+          res[2:length(res)] <- 0
+          for (r in 2:length(res)){
+            res[r] <- rho * res[r-1] + sqrt(1 - rho^2) * rres[r]
+          }
+          
+          test$rres[test$iter==iter_i] <- rres
+          test$res[test$iter==iter_i] <- res
           
         }
 
@@ -370,7 +385,7 @@ test$future <- test$fitted * exp(test$res)
 
 # 10 randomly selected iters for plotting
 # should probably increase the number later
-i_samp <- sample(seq(dim(sr)[6]), 10, replace=FALSE)
+i_samp <- sample(seq(dim(sr)[6]), 20, replace=FALSE)
 
 # Plot past and future stock recruit pairs for selected iters
 ggplot(test[is.element(test$iter, i_samp),]) +
@@ -391,7 +406,7 @@ ggplot(test[is.element(test$iter, i_samp),]) +
 
 # Combine previous two plots over iters
 # Stock recruit pairs
-ggplot(test[is.element(test$iter, i_samp),]) +
+ggplot(test) +
   geom_point(aes(x = SSB, y = rec), 
              alpha = 0.5, colour = "red", shape = 19) +
   geom_point(aes(x = SSB, y = future), 
@@ -399,7 +414,7 @@ ggplot(test[is.element(test$iter, i_samp),]) +
   theme_bw() + xlim(0, NA) + ylim(0, NA)
 
 # Empirical cumulative distribution
-ggplot(test[is.element(test$iter, i_samp),]) +
+ggplot(test) +
   stat_ecdf(aes(rec), geom = "step", colour = "red") +
   stat_ecdf(aes(future), geom = "step", colour = "black") +
   theme_bw() + xlim(0, NA) + ylim(0, NA)
@@ -430,7 +445,19 @@ res_new <- foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore",
   ### sample residuals
   mu <- sample(x = res_i, size = length(yrs_res), replace = TRUE)
   ### "smooth", i.e. sample from density distribution
-  res_new <- rnorm(n = length(yrs_res), mean = mu, sd = density$bw)
+  rres <- rnorm(n = length(yrs_res), mean = mu, sd = density$bw)
+  
+  ### calculate serial correlation
+  res_y <- res_i[-length(res_i)]
+  res_yp1 <- res_i[-1]
+  rho <- sum(res_y * res_yp1) / sqrt(sum(res_y^2) * sum(res_yp1^2))
+  
+  ### generate autocorrelated residuals
+  res_new <- rep(0, length(yrs_res))
+  res_new[1] <- rho * res_i[length(res_i)] + sqrt(1 - rho^2) * rres[1]
+  for (r in 2:length(res_new)){
+    res_new[r] <- rho * res_new[r-1] + sqrt(1 - rho^2) * rres[r]
+  }
 
   return(res_new)
   
