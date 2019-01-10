@@ -18,17 +18,17 @@ library(FLfse)
 library(stockassessment)
 library(ggplotFL)
 library(FLAssess)
-# library(mse)
+library(mse)
 ### load files from package mse for easier debugging
-devtools::load_all("../mse/")
+# devtools::load_all("../mse/")
 library(FLash)
 library(tidyr)
 library(dplyr)
 
 source("a4a_mse_WKNSMSE_funs.R")
 
-dir.create(path = "input/cod4", recursive = TRUE)
-dir.create(path = "output/runs/cod4", recursive = TRUE)
+dir.create(path = "input/cod4_alt2", recursive = TRUE)
+dir.create(path = "output/runs/cod4_alt2", recursive = TRUE)
 
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
@@ -45,8 +45,17 @@ yr_data <- 2018
 ### fit SAM ####
 ### ------------------------------------------------------------------------ ###
 ### use input data provided in FLfse
-### recreates the WGNSSK2018 cod assessment
-fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+### specify AR covariance structure for survey observations
+cod4_alt_conf <- cod4_conf_sam
+cod4_alt_conf$obsCorStruct <- factor(c("ID","AR","AR"), levels=c("ID","AR","US"))
+### Specify coupling of the correlation parameters
+# one parameter for coupling of age classes 1-3 and another for ages 3+ 
+# correlation parameters the same between surveys
+cod4_alt_conf$keyCorObs[2,] <- c(0,0,1,1,-1)
+cod4_alt_conf$keyCorObs[3,] <- c(0,0,1,-1,-1)
+
+### fit alternative assessment model
+fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_alt_conf)
 
 is(fit)
 fit
@@ -93,13 +102,13 @@ landings(cod4_stk2)[, ac(yrs)] <- computeLandings(cod4_stk2)[, ac(yrs)]
 discards(cod4_stk2)[, ac(yrs)] <- computeDiscards(cod4_stk2)[, ac(yrs)]
 
 ### fit SAM to "corrected" catches
-cod4_conf_sam_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in% 
+cod4_alt_conf_no_mult <- cod4_alt_conf[!names(cod4_alt_conf) %in% 
                                          c("noScaledYears", "keyScaledYears",
                                            "keyParScaledYA")]
 fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
-                conf = cod4_conf_sam_no_mult)
+                conf = cod4_alt_conf_no_mult)
 ### compare results
-summary(fit2) / summary(fit)
+round(summary(fit2) / summary(fit))
 ### estimates and log likelihood identical, only bounds smaller
 
 ### ------------------------------------------------------------------------ ###
@@ -132,6 +141,7 @@ dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
+# May need looking at...
 uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
@@ -530,6 +540,8 @@ stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
 ### ------------------------------------------------------------------------ ###
 ### indices ####
 ### ------------------------------------------------------------------------ ###
+### MAY NEED LOOKING AT TO INCLUDE CORRELATED ERRORS
+
 ### use real FLIndices object as template (included in FLfse)
 idx <- cod4_idx
 ### extend for simulation period
@@ -649,7 +661,7 @@ plot(catch_res)
 ### ------------------------------------------------------------------------ ###
 
 ### path
-input_path <- paste0("input/cod4/", n, "_", n_years, "/")
+input_path <- paste0("input/cod4_alt2/", n, "_", n_years, "/")
 dir.create(input_path)
 ### stock
 saveRDS(stk_fwd, file = paste0(input_path, "stk.rds"))
@@ -669,163 +681,163 @@ saveRDS(stk_oem, file = paste0(input_path, "stk_oem.rds"))
 ### sam initial parameters
 saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 ### sam configuration
-saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
+saveRDS(cod4_alt_conf_no_mult, file = paste0(input_path, "cod4_alt_conf_no_mult"))
 
 
-### ------------------------------------------------------------------------ ###
-### prepare objects for new a4a standard mse package ####
-### ------------------------------------------------------------------------ ###
-### https://github.com/flr/mse
-
-### save workspace to start from here
-# save.image(file = "input/cod4/image_10.RData")
-# load(file = "input/cod4/image_10.RData")
-
-### reference points
-refpts_mse <- list(Btrigger = 150000,
-                   Ftrgt = 0.31,
-                   Fpa = 0.39,
-                   Bpa = 150000)
-### some specifications for short term forecast with SAM
-cod4_stf_def <- list(fwd_yrs_average = -3:0,
-                     fwd_yrs_rec_start = 1998,
-                     fwd_yrs_sel = -3:-1,
-                     fwd_yrs_lf_remove = -2:-1,
-                     fwd_splitLD = TRUE)
-
-### some arguments (passed to mp())
-genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
-                y0 = dims(stk_fwd)$minyear, ### first data year
-                iy = yr_data, ### first simulation (intermediate) year
-                nsqy = 3, ### not used, but has to provided
-                nblocks = 1, ### block for parallel processing
-                seed = 1 ### random number seed before starting MSE
-)
-
-### operating model
-om <- FLom(stock = stk_fwd, ### stock 
-           sr = sr, ### stock recruitment and precompiled residuals
-           projection = mseCtrl(method = fwd_WKNSMSE, 
-                                args = list(maxF = 2,
-                                            ### process noise on stock.n
-                                            proc_res = "fitted"
-                                ))
-)
-
-### observation (error) model
-oem <- FLoem(method = oem_WKNSMSE,
-             observations = list(stk = stk_oem, idx = idx), 
-             deviances = list(stk = FLQuants(catch.dev = catch_res), 
-                              idx = idx_dev),
-             args = list(idx_timing = c(0, -1),
-                         catch_timing = -1,
-                         use_catch_residuals = TRUE, 
-                         use_idx_residuals = TRUE,
-                         use_stk_oem = TRUE))
-### implementation error model (banking and borrowing)
-# iem <- FLiem(method = iem_WKNSMSE, 
-#              args = list(BB = TRUE))
-
-### default management
-ctrl_obj <- mpCtrl(list(
-  ctrl.est = mseCtrl(method = SAM_wrapper,
-                     args = c(### short term forecast specifications
-                       forecast = TRUE, 
-                       fwd_trgt = "fsq", fwd_yrs = 1, 
-                       cod4_stf_def,
-                       ### speeding SAM up
-                       newtonsteps = 0, rel.tol = 0.001,
-                       par_ini = list(sam_initial),
-                       track_ini = TRUE, ### store ini for next year
-                       ### SAM model specifications
-                       conf = list(cod4_conf_sam_no_mult),
-                       parallel = TRUE ### TESTING ONLY
-                     )),
-  ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
-                      args = refpts_mse),
-  ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  ctrl.is = mseCtrl(method = is_WKNSMSE, 
-                    args = c(hcrpars = list(refpts_mse),
-                             ### for short term forecast
-                             fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
-                             cod4_stf_def,
-                             ### TAC constraint
-                             TAC_constraint = TRUE,
-                             lower = -Inf, upper = Inf,
-                             Btrigger_cond = FALSE,
-                             ### banking and borrowing 
-                             BB = TRUE,
-                             BB_conditional = TRUE,
-                             BB_rho = list(c(-0.1, 0.1))
-                    )),
-  ctrl.tm = NULL
-))
-### additional tracking metrics
-tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
-
-### try running mse
-# library(doParallel)
-# cl <- makeCluster(10)
-# registerDoParallel(cl)
-
-### run MSE
-### WARNING: takes a while...
-### check normal execution
-res1 <- mp(om = om,
-           oem = oem,
-           iem = iem,
-           ctrl.mp = ctrl_obj,
-           genArgs = genArgs,
-           tracking = tracking_add)
-### check mpParallel function
-# resp1 <- mpParallel(om = om,
-#                     oem = oem,
-#                     iem = iem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
+# ### ------------------------------------------------------------------------ ###
+# ### prepare objects for new a4a standard mse package ####
+# ### ------------------------------------------------------------------------ ###
+# ### https://github.com/flr/mse
 # 
-# ### split into 2 parts
-# genArgs$nblocks <- 2
-# resp2 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# ### execute in parallel
-# library(doParallel)
-# cl <- makeCluster(2)
-# registerDoParallel(cl)
-# ### load packages and additional functions into workers
-# clusterEvalQ(cl = cl, expr = {
-#   library(mse)
-#   library(FLash)
-#   library(FLfse)
-#   library(stockassessment)
-#   library(foreach)
-#   library(doRNG)
-#   source("a4a_mse_WKNSMSE_funs.R")
-# })
+# ### save workspace to start from here
+# # save.image(file = "input/cod4/image_10.RData")
+# # load(file = "input/cod4/image_10.RData")
+# 
+# ### reference points
+# refpts_mse <- list(Btrigger = 150000,
+#                    Ftrgt = 0.31,
+#                    Fpa = 0.39,
+#                    Bpa = 150000)
+# ### some specifications for short term forecast with SAM
+# cod4_stf_def <- list(fwd_yrs_average = -3:0,
+#                      fwd_yrs_rec_start = 1998,
+#                      fwd_yrs_sel = -3:-1,
+#                      fwd_yrs_lf_remove = -2:-1,
+#                      fwd_splitLD = TRUE)
+# 
+# ### some arguments (passed to mp())
+# genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+#                 y0 = dims(stk_fwd)$minyear, ### first data year
+#                 iy = yr_data, ### first simulation (intermediate) year
+#                 nsqy = 3, ### not used, but has to provided
+#                 nblocks = 1, ### block for parallel processing
+#                 seed = 1 ### random number seed before starting MSE
+# )
+# 
+# ### operating model
+# om <- FLom(stock = stk_fwd, ### stock 
+#            sr = sr, ### stock recruitment and precompiled residuals
+#            projection = mseCtrl(method = fwd_WKNSMSE, 
+#                                 args = list(maxF = 2,
+#                                             ### process noise on stock.n
+#                                             proc_res = "fitted"
+#                                 ))
+# )
+# 
+# ### observation (error) model
+# oem <- FLoem(method = oem_WKNSMSE,
+#              observations = list(stk = stk_oem, idx = idx), 
+#              deviances = list(stk = FLQuants(catch.dev = catch_res), 
+#                               idx = idx_dev),
+#              args = list(idx_timing = c(0, -1),
+#                          catch_timing = -1,
+#                          use_catch_residuals = TRUE, 
+#                          use_idx_residuals = TRUE,
+#                          use_stk_oem = TRUE))
+# ### implementation error model (banking and borrowing)
+# # iem <- FLiem(method = iem_WKNSMSE, 
+# #              args = list(BB = TRUE))
+# 
+# ### default management
+# ctrl_obj <- mpCtrl(list(
+#   ctrl.est = mseCtrl(method = SAM_wrapper,
+#                      args = c(### short term forecast specifications
+#                        forecast = TRUE, 
+#                        fwd_trgt = "fsq", fwd_yrs = 1, 
+#                        cod4_stf_def,
+#                        ### speeding SAM up
+#                        newtonsteps = 0, rel.tol = 0.001,
+#                        par_ini = list(sam_initial),
+#                        track_ini = TRUE, ### store ini for next year
+#                        ### SAM model specifications
+#                        conf = list(cod4_conf_sam_no_mult),
+#                        parallel = TRUE ### TESTING ONLY
+#                      )),
+#   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
+#                       args = refpts_mse),
+#   ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
+#   ctrl.is = mseCtrl(method = is_WKNSMSE, 
+#                     args = c(hcrpars = list(refpts_mse),
+#                              ### for short term forecast
+#                              fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
+#                              cod4_stf_def,
+#                              ### TAC constraint
+#                              TAC_constraint = TRUE,
+#                              lower = -Inf, upper = Inf,
+#                              Btrigger_cond = FALSE,
+#                              ### banking and borrowing 
+#                              BB = TRUE,
+#                              BB_conditional = TRUE,
+#                              BB_rho = list(c(-0.1, 0.1))
+#                     )),
+#   ctrl.tm = NULL
+# ))
+# ### additional tracking metrics
+# tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
+# 
+# ### try running mse
+# # library(doParallel)
+# # cl <- makeCluster(10)
+# # registerDoParallel(cl)
+# 
 # ### run MSE
-# resp3 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# ### try reproducible parallel execution
-# library(doRNG)
-# registerDoRNG(123) 
-# resp4 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# registerDoRNG(123) 
-# resp5 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-
-### create Rmarkdown file
-# knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
+# ### WARNING: takes a while...
+# ### check normal execution
+# res1 <- mp(om = om,
+#            oem = oem,
+#            iem = iem,
+#            ctrl.mp = ctrl_obj,
+#            genArgs = genArgs,
+#            tracking = tracking_add)
+# ### check mpParallel function
+# # resp1 <- mpParallel(om = om,
+# #                     oem = oem,
+# #                     iem = iem,
+# #                     ctrl.mp = ctrl_obj,
+# #                     genArgs = genArgs,
+# #                     tracking = tracking_add)
+# # 
+# # ### split into 2 parts
+# # genArgs$nblocks <- 2
+# # resp2 <- mpParallel(om = om,
+# #                     oem = oem,
+# #                     ctrl.mp = ctrl_obj,
+# #                     genArgs = genArgs,
+# #                     tracking = tracking_add)
+# # ### execute in parallel
+# # library(doParallel)
+# # cl <- makeCluster(2)
+# # registerDoParallel(cl)
+# # ### load packages and additional functions into workers
+# # clusterEvalQ(cl = cl, expr = {
+# #   library(mse)
+# #   library(FLash)
+# #   library(FLfse)
+# #   library(stockassessment)
+# #   library(foreach)
+# #   library(doRNG)
+# #   source("a4a_mse_WKNSMSE_funs.R")
+# # })
+# # ### run MSE
+# # resp3 <- mpParallel(om = om,
+# #                     oem = oem,
+# #                     ctrl.mp = ctrl_obj,
+# #                     genArgs = genArgs,
+# #                     tracking = tracking_add)
+# # ### try reproducible parallel execution
+# # library(doRNG)
+# # registerDoRNG(123) 
+# # resp4 <- mpParallel(om = om,
+# #                     oem = oem,
+# #                     ctrl.mp = ctrl_obj,
+# #                     genArgs = genArgs,
+# #                     tracking = tracking_add)
+# # registerDoRNG(123) 
+# # resp5 <- mpParallel(om = om,
+# #                     oem = oem,
+# #                     ctrl.mp = ctrl_obj,
+# #                     genArgs = genArgs,
+# #                     tracking = tracking_add)
+# 
+# ### create Rmarkdown file
+# # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
