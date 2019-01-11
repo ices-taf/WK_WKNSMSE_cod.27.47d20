@@ -30,12 +30,15 @@ source("a4a_mse_WKNSMSE_funs.R")
 dir.create(path = "input/cod4", recursive = TRUE)
 dir.create(path = "output/runs/cod4", recursive = TRUE)
 
+### create plots and print to screen?
+verbose <- TRUE
+
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations/replicates
-n <- 10
+n <- 1000
 ### number of years
 n_years <- 20
 ### last data year
@@ -48,9 +51,11 @@ yr_data <- 2018
 ### recreates the WGNSSK2018 cod assessment
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
 
-is(fit)
-fit
-plot(fit)
+if (isTRUE(verbose)) {
+  is(fit)
+  fit
+  plot(fit)
+}
 
 ### extract model parameters and use them in the simulation as starting values
 sam_initial <- sam_getpar(fit)
@@ -99,7 +104,7 @@ cod4_conf_sam_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in%
 fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
                 conf = cod4_conf_sam_no_mult)
 ### compare results
-summary(fit2) / summary(fit)
+if (isTRUE(verbose)) summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
 ### ------------------------------------------------------------------------ ###
@@ -110,12 +115,12 @@ summary(fit2) / summary(fit)
 ### the catch multiplier, 
 ### the results (stock numbers & harvest) are used from the real WGNSSK fit
 stk <- SAM2FLStock(object = fit, stk = cod4_stk2)
-summary(stk)
+if (isTRUE(verbose)) summary(stk)
 
 ### set units
 units(stk)[1:17] <- as.list(c(rep(c("t", "1000", "kg"), 4),
                               "", "", "f", "", ""))
-plot(stk)
+if (isTRUE(verbose)) plot(stk)
 
 ### save for later comparison
 stk_orig <- stk
@@ -141,7 +146,7 @@ harvest(stk)[] <- uncertainty$harvest
 
 ### catch noise added later
 
-plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### maximum observed F
 max(fbar(stk))
@@ -302,7 +307,7 @@ mat(stk_stf)[, ac(2018)] <- mat(stk_orig)[, ac(2018)]
 ### use different samples for selectivity
 harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
 
-plot(stk_stf)
+if (isTRUE(verbose)) plot(stk_stf)
 
 ### ------------------------------------------------------------------------ ###
 ### stock recruitment ####
@@ -319,93 +324,100 @@ suppressWarnings(. <- capture.output(sr <- fmle(sr)))
 # cl <- makeCluster(10)
 # registerDoParallel(cl)
 # sr <- fmle_parallel(sr, cl)
+# ### run again for failed iterations
+# pos_error <- which(is.na(params(sr)["a"]))
+# sr_corrected <- fmle(FLCore::iter(sr, pos_error))
+# sr[,,,,, pos_error] <- sr_corrected[]
+# params(sr)[, pos_error] <- params(sr_corrected)
 
-plot(sr)
-### check breakpoints
-summary(params(sr)["b"])
-
-### plot model and data
-as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
-  mutate(age = NULL,
-         year = ifelse(qname == "SSB", year + 1, year)) %>%
-  tidyr::spread(key = qname, value = data) %>%
-  ggplot() +
-  geom_point(aes(x = SSB, y = rec, group = iter), 
-             alpha = 0.5, colour = "grey", shape = 1) +
-  geom_line(aes(x = SSB, y = fitted, group = iter)) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-### Check extent of autocorrelation
-# Not significant, so no need to account for it in this OM
-acf(window(stock.n(stk_orig)[1], start = 1998))
-
-### Check method proposed for generating recruitment compares with past recruitment estimates
-test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
-test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
-test <- tidyr::spread(test, key = qname, value = data)
-test <- test[complete.cases(test),]
-test$res <- rep(NA, nrow(test))
-
-# Generate residuals for future recruitments
-foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
-        .errorhandling = "pass") %do% {
-          
-          set.seed(iter_i^2)
-          
-          ### get residuals for current iteration
-          res_i <- c(FLCore::iter(residuals(sr), iter_i))
-          res_i <- res_i[!is.na(res_i)]
-          
-          ### calculate kernel density of residuals
-          density <- density(x = res_i)
-          ### sample residuals
-          mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
-          ### "smooth", i.e. sample from density distribution
-          test$res[test$iter==iter_i] <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
-          
-        }
-
-# Generate future recruitments from past SSBs and generated residuals
-test$future <- test$fitted * exp(test$res)
-
-# 10 randomly selected iters for plotting
-# should probably increase the number later
-i_samp <- sample(seq(dim(sr)[6]), 10, replace=FALSE)
-
-# Plot past and future stock recruit pairs for selected iters
-ggplot(test[is.element(test$iter, i_samp),]) +
-  geom_point(aes(x = SSB, y = rec), 
-             alpha = 0.5, colour = "red", shape = 19) +
-  geom_point(aes(x = SSB, y = future), 
-             alpha = 0.5, colour = "black", shape = 19) +
-  geom_line(aes(x = SSB, y = fitted)) +
-  facet_wrap(~iter) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Empirical cumulative distributions for the same iters
-ggplot(test[is.element(test$iter, i_samp),]) +
-  stat_ecdf(aes(rec), geom = "step", colour = "red") +
-  stat_ecdf(aes(future), geom = "step", colour = "black") +
-  facet_wrap(~iter) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Combine previous two plots over iters
-# Stock recruit pairs
-ggplot(test[is.element(test$iter, i_samp),]) +
-  geom_point(aes(x = SSB, y = rec), 
-             alpha = 0.5, colour = "red", shape = 19) +
-  geom_point(aes(x = SSB, y = future), 
-             alpha = 0.5, colour = "black", shape = 19) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Empirical cumulative distribution
-ggplot(test[is.element(test$iter, i_samp),]) +
-  stat_ecdf(aes(rec), geom = "step", colour = "red") +
-  stat_ecdf(aes(future), geom = "step", colour = "black") +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-rm(test, i_samp)
-
+if (isTRUE(verbose)) {
+  
+  plot(sr)
+  ### check breakpoints
+  summary(params(sr)["b"])
+  
+  ### plot model and data
+  as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
+    mutate(age = NULL,
+           year = ifelse(qname == "SSB", year + 1, year)) %>%
+    tidyr::spread(key = qname, value = data) %>%
+    ggplot() +
+    geom_point(aes(x = SSB, y = rec, group = iter), 
+               alpha = 0.5, colour = "grey", shape = 1) +
+    geom_line(aes(x = SSB, y = fitted, group = iter)) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  ### Check extent of autocorrelation
+  # Not significant, so no need to account for it in this OM
+  acf(window(stock.n(stk_orig)[1], start = 1998))
+  
+  ### Check method proposed for generating recruitment compares with past recruitment estimates
+  test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
+  test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
+  test <- tidyr::spread(test, key = qname, value = data)
+  test <- test[complete.cases(test),]
+  test$res <- rep(NA, nrow(test))
+  
+  # Generate residuals for future recruitments
+  foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
+          .errorhandling = "pass") %do% {
+            
+            set.seed(iter_i^2)
+            
+            ### get residuals for current iteration
+            res_i <- c(FLCore::iter(residuals(sr), iter_i))
+            res_i <- res_i[!is.na(res_i)]
+            
+            ### calculate kernel density of residuals
+            density <- density(x = res_i)
+            ### sample residuals
+            mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
+            ### "smooth", i.e. sample from density distribution
+            test$res[test$iter==iter_i] <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
+            
+          }
+  
+  # Generate future recruitments from past SSBs and generated residuals
+  test$future <- test$fitted * exp(test$res)
+  
+  # 10 randomly selected iters for plotting
+  # should probably increase the number later
+  i_samp <- sample(seq(dim(sr)[6]), 10, replace=FALSE)
+  
+  # Plot past and future stock recruit pairs for selected iters
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    geom_point(aes(x = SSB, y = rec), 
+               alpha = 0.5, colour = "red", shape = 19) +
+    geom_point(aes(x = SSB, y = future), 
+               alpha = 0.5, colour = "black", shape = 19) +
+    geom_line(aes(x = SSB, y = fitted)) +
+    facet_wrap(~iter) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Empirical cumulative distributions for the same iters
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    stat_ecdf(aes(rec), geom = "step", colour = "red") +
+    stat_ecdf(aes(future), geom = "step", colour = "black") +
+    facet_wrap(~iter) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Combine previous two plots over iters
+  # Stock recruit pairs
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    geom_point(aes(x = SSB, y = rec), 
+               alpha = 0.5, colour = "red", shape = 19) +
+    geom_point(aes(x = SSB, y = future), 
+               alpha = 0.5, colour = "black", shape = 19) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Empirical cumulative distribution
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    stat_ecdf(aes(rec), geom = "step", colour = "red") +
+    stat_ecdf(aes(future), geom = "step", colour = "black") +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  rm(test, i_samp)
+}
 
 ### generate residuals for MSE
 ### years with missing residuals
@@ -442,7 +454,7 @@ residuals(sr)[, yrs_res] <- unlist(res_new)
 residuals(sr) <- exp(residuals(sr))
 sr_res <- residuals(sr)
 
-plot(sr_res)
+if (isTRUE(verbose)) plot(sr_res)
 
 ### ------------------------------------------------------------------------ ###
 ### process noise ####
@@ -575,23 +587,27 @@ idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <-
   idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2017] /
   index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam@index)$year <= 2017]
 
-### compare simulated to original survey(s)
-as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
-                       cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
-                       sim_q1 = (index(idx$IBTS_Q1_gam)),
-                       sim_q3 = (index(idx$IBTS_Q3_gam))
-)) %>%
-  mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
-         source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
-  filter(year <= 2019) %>%
-  ggplot(aes(x = year, y = data, colour = source)) +
-  facet_grid(paste("age", age) ~ paste("IBTS", survey), scales = "free_y") +
-  stat_summary(fun.y = quantile, fun.args = 0.25, geom = "line",
-               alpha = 0.5) +
-  stat_summary(fun.y = quantile, fun.args = 0.75, geom = "line",
-               alpha = 0.5) +
-  stat_summary(fun.y = median, geom = "line") +
-  theme_bw()
+if (isTRUE(verbose)) {
+
+  ### compare simulated to original survey(s)
+  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
+                         cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
+                         sim_q1 = (index(idx$IBTS_Q1_gam)),
+                         sim_q3 = (index(idx$IBTS_Q3_gam))
+  )) %>%
+    mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
+           source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
+    filter(year <= 2019) %>%
+    ggplot(aes(x = year, y = data, colour = source)) +
+    facet_grid(paste("age", age) ~ paste("IBTS", survey), scales = "free_y") +
+    stat_summary(fun.y = quantile, fun.args = 0.25, geom = "line",
+                 alpha = 0.5) +
+    stat_summary(fun.y = quantile, fun.args = 0.75, geom = "line",
+                 alpha = 0.5) +
+    stat_summary(fun.y = median, geom = "line") +
+    theme_bw()
+
+}
 
 ### check survey
 # idx0 <- calc_survey(stk = stk_fwd, idx = idx)
@@ -623,7 +639,7 @@ catch_res <- exp(catch_res)
 ### -> remove deviation
 catch_res[, dimnames(catch_res)$year <= 2017] <- 1
 
-plot(catch_res)
+if (isTRUE(verbose)) plot(catch_res)
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
