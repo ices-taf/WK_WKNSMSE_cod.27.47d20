@@ -766,7 +766,7 @@ ctrl_obj <- mpCtrl(list(
                        track_ini = TRUE, ### store ini for next year
                        ### SAM model specifications
                        conf = list(cod4_conf_sam_no_mult),
-                       parallel = TRUE ### TESTING ONLY
+                       parallel = FALSE ### TESTING ONLY
                      )),
   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
@@ -775,84 +775,80 @@ ctrl_obj <- mpCtrl(list(
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
-                             cod4_stf_def,
+                             cod4_stf_def#,
                              ### TAC constraint
-                             TAC_constraint = TRUE,
-                             lower = -Inf, upper = Inf,
-                             Btrigger_cond = FALSE,
+                             #TAC_constraint = TRUE,
+                             #lower = -Inf, upper = Inf,
+                             #Btrigger_cond = FALSE,
                              ### banking and borrowing 
-                             BB = TRUE,
-                             BB_conditional = TRUE,
-                             BB_rho = list(c(-0.1, 0.1))
-                    )),
-  ctrl.tm = NULL
+                             #BB = TRUE,
+                             #BB_conditional = TRUE,
+                             #BB_rho = list(c(-0.1, 0.1))
+                    ))#,
+  #ctrl.tm = NULL
 ))
 ### additional tracking metrics
 tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 
-### try running mse
-# library(doParallel)
-# cl <- makeCluster(10)
-# registerDoParallel(cl)
+### save mse objects
+input <- list(om = om, oem = oem, ctrl.mp = ctrl_obj,
+              genArgs = genArgs, tracking = tracking_add)
+saveRDS(object = input, 
+        file = paste0(input_path, "base_run.rds"))
+# input <- readRDS(paste0(input_path, "/base_run.rds"))
+
+### ------------------------------------------------------------------------ ###
+### run MSE ####
+### ------------------------------------------------------------------------ ###
+
 
 ### run MSE
 ### WARNING: takes a while...
 ### check normal execution
-res1 <- mp(om = om,
-           oem = oem,
-           iem = iem,
-           ctrl.mp = ctrl_obj,
-           genArgs = genArgs,
-           tracking = tracking_add)
-### check mpParallel function
-# resp1 <- mpParallel(om = om,
-#                     oem = oem,
-#                     iem = iem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# 
-# ### split into 2 parts
-# genArgs$nblocks <- 2
-# resp2 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# ### execute in parallel
-# library(doParallel)
-# cl <- makeCluster(2)
-# registerDoParallel(cl)
-# ### load packages and additional functions into workers
-# clusterEvalQ(cl = cl, expr = {
-#   library(mse)
-#   library(FLash)
-#   library(FLfse)
-#   library(stockassessment)
-#   library(foreach)
-#   library(doRNG)
-#   source("a4a_mse_WKNSMSE_funs.R")
-# })
-# ### run MSE
-# resp3 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# ### try reproducible parallel execution
-# library(doRNG)
-# registerDoRNG(123) 
-# resp4 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
-# registerDoRNG(123) 
-# resp5 <- mpParallel(om = om,
-#                     oem = oem,
-#                     ctrl.mp = ctrl_obj,
-#                     genArgs = genArgs,
-#                     tracking = tracking_add)
+res1 <- mp(om = input$om,
+           oem = input$oem,
+           #iem = iem,
+           ctrl.mp = input$ctrl.mp,
+           genArgs = input$genArgs,
+           tracking = input$tracking)
+
+
+
+### ------------------------------------------------------------------------ ###
+### create MSE input objects for running fixed F=0 ####
+### ------------------------------------------------------------------------ ###
+
+### load image with objects for 10,000 iterations and 100 years
+load(file = "input/cod4/10000_100/image.RData")
+### genArgs
+genArgs_F0 <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+                   y0 = dims(stk_fwd)$minyear, ### first data year
+                   iy = yr_data, ### first simulation (intermediate) year
+                   nsqy = 3, ### not used, but has to provided
+                   nblocks = 1, ### block for parallel processing
+                   seed = 1 ### random number seed before starting MSE
+)
+### OM
+om_F0 <- FLom(stock = stk_fwd, sr = sr,
+              projection = mseCtrl(method = fwd_WKNSMSE, 
+                                   args = list(maxF = 2,
+                                               proc_res = "fitted"
+                                               )))
+### define target
+ctrl_F0 <- mpCtrl(list(
+  ctrl.hcr = mseCtrl(method = fixedF.hcr, 
+                     args = list(ftrg = 0))))
+### fake OEM, otherwise mp falls over...
+oem_F0 <- FLoem(observations = list(stk = FLQuant(0)), 
+                deviances = list(stk = FLQuant(0))
+)
+
+### combine elements
+input_F0 <- list(om = om_F0, oem = oem_F0, ctrl.mp = ctrl_F0, 
+                 genArgs = genArgs_F0)
+
+### save
+saveRDS(object = input_F0, file = "input/cod4/10000_100/data_F0.RData")
 
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
