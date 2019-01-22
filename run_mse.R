@@ -129,8 +129,8 @@ if (exists("HCRoption")) {
 
 ### create Btrigger & Ftrgt combinations
 hcr_vals <- expand.grid(
-  Btrigger = seq(from = 70000, to = 150000, length.out = 3),
-  Ftrgt = c(0.2, 0.31, 0.4))
+  Btrigger = seq(from = 110000, to = 190000, length.out = 5),
+  Ftrgt = c(0.1, 0.2, 0.3, 0.4, 0.5))
 
 ### implement
 if (exists("HCR_comb")) {
