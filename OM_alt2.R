@@ -49,10 +49,9 @@ yr_data <- 2018
 cod4_alt_conf <- cod4_conf_sam
 cod4_alt_conf$obsCorStruct <- factor(c("ID","AR","AR"), levels=c("ID","AR","US"))
 ### Specify coupling of the correlation parameters
-# one parameter for coupling of age classes 1-3 and another for ages 3+ 
-# correlation parameters the same between surveys
-cod4_alt_conf$keyCorObs[2,] <- c(0,0,1,1,-1)
-cod4_alt_conf$keyCorObs[3,] <- c(0,0,1,-1,-1)
+# one parameter for each survey 
+cod4_alt_conf$keyCorObs[2,] <- c(0,0,0,0,-1)
+cod4_alt_conf$keyCorObs[3,] <- c(1,1,1,-1,-1)
 
 ### fit alternative assessment model
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_alt_conf)
