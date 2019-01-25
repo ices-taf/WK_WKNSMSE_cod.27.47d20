@@ -774,7 +774,7 @@ ctrl_obj <- mpCtrl(list(
   ctrl.is = mseCtrl(method = is_WKNSMSE, 
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
-                             fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
+                             fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
                              cod4_stf_def#,
                              ### TAC constraint
                              #TAC_constraint = TRUE,
