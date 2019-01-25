@@ -112,7 +112,10 @@ if (exists("HCRoption")) {
   input$ctrl.mp$ctrl.hcr@args$option <- switch(HCRoption, 
                                                "1" = "A", 
                                                "2" = "B", 
-                                               "3" = "C")
+                                               "3" = "C",
+                                               "4" = "A",
+                                               "5" = "B",
+                                               "6" = "C")
   
   cat(paste0("\nSetting custom HCR option: HCRoption = ", HCRoption, 
              " => HCR ", input$ctrl.mp$ctrl.hcr@args$option, "\n\n"))
@@ -121,36 +124,60 @@ if (exists("HCRoption")) {
   
   cat(paste0("\nUsing default HCR option: HCR ", 
              input$ctrl.mp$ctrl.hcr@args$option, "\n\n"))
+  HCRoption <- 0
   
 }
 
 ### ------------------------------------------------------------------------ ###
 ### set HCR parameters 
 
-### create Btrigger & Ftrgt combinations
-hcr_vals <- expand.grid(
-  Btrigger = seq(from = 110000, to = 190000, length.out = 5),
-  Ftrgt = c(0.1, 0.2, 0.3, 0.4, 0.5))
-### 1-25
-hcr_vals <- rbind(hcr_vals,
-                  expand.grid(
-                    Btrigger = seq(from = 110000, to = 190000, length.out = 5),
-                    Ftrgt = c(0.32, 0.34, 0.36, 0.38)))
-### 26-45
-hcr_vals <- rbind(hcr_vals,
-                  expand.grid(
-                    Btrigger = c(130000, 150000, 170000),
-                    Ftrgt = c(0.39, 0.37)))
-### 46-51
-hcr_vals <- rbind(hcr_vals,
-                  data.frame(Btrigger = c(110000), Ftrgt = c(0.35)))
-### 52
-hcr_vals <- rbind(hcr_vals,
-  expand.grid(Btrigger = 120000, Ftrgt = c(0.35, 0.36, 0.37)),
-  expand.grid(Btrigger = 140000, Ftrgt = c(0.36, 0.37, 0.38)),
-  expand.grid(Btrigger = 160000, Ftrgt = c(0.37, 0.38, 0.39, 0.4))
-)
-### 53-61
+if (HCRoption == 1) {
+  ### create Btrigger & Ftrgt combinations
+  hcr_vals <- expand.grid(
+    Btrigger = seq(from = 110000, to = 190000, length.out = 5),
+    Ftrgt = c(0.1, 0.2, 0.3, 0.4, 0.5))
+  ### 1-25
+  hcr_vals <- rbind(hcr_vals,
+    expand.grid(
+      Btrigger = seq(from = 110000, to = 190000, length.out = 5),
+      Ftrgt = c(0.32, 0.34, 0.36, 0.38)))
+  ### 26-45
+  hcr_vals <- rbind(hcr_vals,
+    expand.grid(
+      Btrigger = c(130000, 150000, 170000),
+      Ftrgt = c(0.39, 0.37)))
+  ### 46-51
+  hcr_vals <- rbind(hcr_vals,
+    data.frame(Btrigger = c(110000), Ftrgt = c(0.35)))
+  ### 52
+  hcr_vals <- rbind(hcr_vals,
+    expand.grid(Btrigger = 120000, Ftrgt = c(0.35, 0.36, 0.37)),
+    expand.grid(Btrigger = 140000, Ftrgt = c(0.36, 0.37, 0.38)),
+    expand.grid(Btrigger = 160000, Ftrgt = c(0.37, 0.38, 0.39, 0.4))
+  )
+  ### 53-62
+  ### assume best option is Btrigger=originial Btrigger = 150,000
+  ### additional runs for Ftrgt=0.37: 0.9*Ftrgt & 1.1*Ftrgt
+  ### FMSYlower/upper
+  ### and original Ftrgt=0.31
+  hcr_vals <- rbind(hcr_vals,
+    expand.grid(Btrigger = 150000, 
+                Ftrgt = c(0.37*0.9, 0.37*1.1, 0.198, 0.46, 0.31))
+  )
+  ### 63-67
+  ### find where risk surpasses 5% at high Btrigger values
+  hcr_vals <- rbind(hcr_vals,
+    expand.grid(Btrigger = 180000, Ftrgt = c(0.39, 0.4, 0.41, 0.42)),
+    expand.grid(Btrigger = 190000, Ftrgt = c(0.41, 0.42, 0.43, 0.44))
+  )
+  ### 68-75
+
+} else if (HCRoption %in% 2:6) {
+  hcr_vals <- expand.grid(
+    Btrigger = seq(from = 110000, to = 190000, length.out = 5),
+    Ftrgt = c(0.1, 0.2, 0.3, 0.35, 0.37, 0.4, 0.5))
+  ### 1-35
+}
 
 ### implement
 if (exists("HCR_comb")) {
@@ -181,27 +208,29 @@ if (exists("HCR_comb")) {
 ### ------------------------------------------------------------------------ ###
 ### TAC constraint
 input$ctrl.mp$ctrl.is@args$TAC_constraint <- FALSE
+### check conditions
+### either manually requested or as part of HCR options 4-6 
 if (exists("TAC_constraint")) {
-  
   if (isTRUE(as.logical(TAC_constraint))) {
-    
     input$ctrl.mp$ctrl.is@args$TAC_constraint <- TRUE
+  }
+}
+if (HCRoption %in% 4:6) {
+    input$ctrl.mp$ctrl.is@args$TAC_constraint <- TRUE
+}
+### implement
+if (isTRUE(input$ctrl.mp$ctrl.is@args$TAC_constraint)) {
+    
     input$ctrl.mp$ctrl.is@args$lower <- 80
     input$ctrl.mp$ctrl.is@args$upper <- 125
     input$ctrl.mp$ctrl.is@args$Btrigger_cond <- TRUE
     
     cat(paste0("\nImplementing TAC constraint.\n\n"))
     
-  } else {
+} else {
     
     cat(paste0("\nTAC constraint NOT implemented.\n\n"))
     
-  }
-  
-} else {
-  
-  cat(paste0("\nTAC constraint NOT implemented.\n\n"))
-  
 }
 
 ### ------------------------------------------------------------------------ ###
@@ -209,23 +238,38 @@ if (exists("TAC_constraint")) {
 input$ctrl.mp$ctrl.is@args$BB <- FALSE
 input$iem <- NULL
 
+### check conditions
+### either manually requested or as part of HCR options 4-6 
 if (exists("BB")) {
-  
-  if (isTRUE(as.logical(BB))) {
+  if (isTRUE(as.logical(TAC_constraint))) 
     
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
-    
     input$ctrl.mp$ctrl.is@args$BB <- TRUE
     input$ctrl.mp$ctrl.is@args$BB_conditional <- TRUE
     input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
+
+}
+if (HCRoption %in% 4:6) {
     
-    cat(paste0("\nImplementing banking and borrowing.\n\n"))
+  input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
+  input$ctrl.mp$ctrl.is@args$BB <- TRUE
+  input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
+  
+  if (HCRoption %in% 4) {
     
-  } else {
+    input$ctrl.mp$ctrl.is@args$BB_conditional <- FALSE
     
-    cat(paste0("\nBanking and borrowing NOT implemented.\n\n"))
+  } else if (HCRoption %in% 5:6) {
+    
+    input$ctrl.mp$ctrl.is@args$BB_conditional <- TRUE
     
   }
+  
+}
+
+if (!is.null(input$iem)) {
+    
+    cat(paste0("\nImplementing banking and borrowing.\n\n"))
   
 } else {
   
