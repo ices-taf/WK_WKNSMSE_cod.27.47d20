@@ -131,6 +131,26 @@ if (exists("HCRoption")) {
 hcr_vals <- expand.grid(
   Btrigger = seq(from = 110000, to = 190000, length.out = 5),
   Ftrgt = c(0.1, 0.2, 0.3, 0.4, 0.5))
+### 1-25
+hcr_vals <- rbind(hcr_vals,
+                  expand.grid(
+                    Btrigger = seq(from = 110000, to = 190000, length.out = 5),
+                    Ftrgt = c(0.32, 0.34, 0.36, 0.38)))
+### 26-45
+hcr_vals <- rbind(hcr_vals,
+                  expand.grid(
+                    Btrigger = c(130000, 150000, 170000),
+                    Ftrgt = c(0.39, 0.37)))
+### 46-51
+hcr_vals <- rbind(hcr_vals,
+                  data.frame(Btrigger = c(110000), Ftrgt = c(0.35)))
+### 52
+hcr_vals <- rbind(hcr_vals,
+  expand.grid(Btrigger = 120000, Ftrgt = c(0.35, 0.36, 0.37)),
+  expand.grid(Btrigger = 140000, Ftrgt = c(0.36, 0.37, 0.38)),
+  expand.grid(Btrigger = 160000, Ftrgt = c(0.37, 0.38, 0.39, 0.4))
+)
+### 53-61
 
 ### implement
 if (exists("HCR_comb")) {
@@ -273,6 +293,12 @@ saveRDS(object = res1, paste0(path_out, "/", file_out, ".rds"))
 # mpi.finalize()
 ### mpi.finalize() or mpi.quit() hang...
 ### -> kill R, the MPI processes stop afterwards
+
+### try killing current job...
+if (par_env == 1 & exists("kill")) {
+  system("bkill $LSB_JOBID")
+}
+
 quit(save = "no")
 
 
