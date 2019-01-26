@@ -712,7 +712,8 @@ save.image(file = paste0(input_path, "image.RData"))
 refpts_mse <- list(Btrigger = 150000,
                    Ftrgt = 0.31,
                    Fpa = 0.39,
-                   Bpa = 150000)
+                   Bpa = 150000,
+                   Blim = 107000)
 ### some specifications for short term forecast with SAM
 cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_yrs_rec_start = 1998,

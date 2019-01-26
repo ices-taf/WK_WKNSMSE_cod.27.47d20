@@ -390,10 +390,14 @@ SAM_wrapper <- function(stk, idx, tracking,
 ### ------------------------------------------------------------------------ ###
 ### phcr: parameterize HCR ####
 ### ------------------------------------------------------------------------ ###
-phcr_WKNSMSE <- function(Btrigger, Ftrgt, Bpa, Fpa, tracking, ...) {
+phcr_WKNSMSE <- function(Btrigger = NULL, Ftrgt = NULL, Bpa = NULL, Fpa = NULL,
+                         Blim = NULL, tracking, ...) {
   
-  ### coerce into FLPar
-  hcrpars <- FLPar(Btrigger = Btrigger, Ftrgt = Ftrgt, Fpa = Fpa, Bpa = Bpa)
+  ### coerce existing values into FLPar
+  hcrpars <- list(Btrigger = Btrigger, Ftrgt = Ftrgt, Bpa = Bpa, Fpa = Fpa,
+                  Blim = Blim)
+  hcrpars <- hcrpars[!sapply(hcrpars, is.null)]
+  hcrpars <- FLPar(hcrpars)
   
   ### return as list
   ### keep tracking unchanged
@@ -459,7 +463,9 @@ hcr_WKNSME <- function(stk, genArgs, hcrpars, tracking,
     ### SSB < Btrigger
     mult <- ifelse(status_Btrigger < 1, status_Btrigger, 1)
     ### set to 0.25 if SSB < Blim
-    mult[,,,,, pos_Blim] <- 0.25
+    if (length(pos_Blim) > 0) {
+      mult[,,,,, pos_Blim] <- 0.25
+    }
     
   } else if (option == "C") {
     ### option C:
@@ -469,8 +475,10 @@ hcr_WKNSME <- function(stk, genArgs, hcrpars, tracking,
     mult <- ifelse(status_Btrigger < 1, status_Btrigger, 1)
     ### if SSB < Blim, use maximum of SSB/Btrigger or 0.25
     ### i.e. limit ratio to 0.25
-    mult[,,,,, pos_Blim] <- c(ifelse(mult[,,,,, pos_Blim] < 0.25, 0.25, 
-                                     mult[,,,,, pos_Blim]))
+    if (length(pos_Blim) > 0) {
+      mult[,,,,, pos_Blim] <- c(ifelse(mult[,,,,, pos_Blim] < 0.25, 0.25, 
+                                       mult[,,,,, pos_Blim]))
+    }
     
   } else {
     

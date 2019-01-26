@@ -9,10 +9,8 @@
 #BSUB -x
 ## use only 28-core nodes
 #BSUB -R 'span[ptile=28]'
-## job name
-#BSUB -J WKNSMSE
 ## job name for array job
-#BSUB -J WKNSMSE[1-9]
+#BSUB -J WKNSMSE_C[1-35]
 ## where to save standard output and error streams
 ###BSUB -oo reports/%J.out
 ###BSUB -eo reports/%J.err
@@ -48,6 +46,6 @@ echo "starting the simulations..."
 ### run single job without MPI
 #R CMD BATCH --vanilla --quiet '--args iters=1 years=20 nblocks=1 par_env=2 n_workers=1 HCRoption=1 HCR_comb=6 TAC_constraint=0 BB=0' $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.Rout
 ### run array job
-R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=28 HCRoption=1 HCR_comb=$LSB_JOBINDEX TAC_constraint=0 BB=0" $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.$LSB_JOBINDEX.Rout
+R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=28 HCRoption=3 HCR_comb=$LSB_JOBINDEX TAC_constraint=0 BB=0" $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.$LSB_JOBINDEX.Rout
 
 echo "done!"
