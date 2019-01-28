@@ -242,12 +242,14 @@ input$iem <- NULL
 ### check conditions
 ### either manually requested or as part of HCR options 4-6 
 if (exists("BB")) {
-  if (isTRUE(as.logical(BB))) 
+  if (isTRUE(as.logical(BB))) {
     
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
     input$ctrl.mp$ctrl.is@args$BB <- TRUE
     input$ctrl.mp$ctrl.is@args$BB_conditional <- TRUE
     input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
+    
+  }
 
 }
 if (HCRoption %in% 4:6) {
