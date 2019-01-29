@@ -125,6 +125,7 @@ stats_new$iav_medium <- foreach(x = res_list, .packages = "FLCore",
 
 stats <- rbind(stats, stats_new)
 saveRDS(object = stats, file = paste0(path_res, "stats.rds"))
+write.csv(x = stats, file = paste0(path_res, "stats.csv"), row.names = FALSE)
 
 ### ------------------------------------------------------------------------ ###
 ### plot ####
