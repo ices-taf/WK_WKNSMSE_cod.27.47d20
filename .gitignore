@@ -3,4 +3,7 @@
 .RData
 .Ruserdata
 *.Rproj
+output/*
+input/*
+test*
 
