@@ -178,6 +178,12 @@ if (HCRoption == 1) {
     Btrigger = seq(from = 110000, to = 190000, length.out = 5),
     Ftrgt = c(0.1, 0.2, 0.3, 0.35, 0.37, 0.4, 0.5))
   ### 1-35
+  hcr_vals <- rbind(hcr_vals,
+                    data.frame(Btrigger = c(110000, 130000, 150000, 150000,
+                                            170000, 190000, 190000, 190000),
+                               Ftrgt = c(0.36, 0.36, 0.38, 0.39, 0.39, 0.41,
+                                         0.42, 0.43)))
+  ### 36-43
 }
 
 ### implement
