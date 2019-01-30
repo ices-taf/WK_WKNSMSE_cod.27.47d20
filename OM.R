@@ -783,7 +783,8 @@ ctrl_obj <- mpCtrl(list(
                              #Btrigger_cond = FALSE,
                              ### banking and borrowing 
                              #BB = TRUE,
-                             #BB_conditional = TRUE,
+                             #BB_check_hcr = FALSE,
+                             #BB_check_fc = TRUE,
                              #BB_rho = list(c(-0.1, 0.1))
                     ))#,
   #ctrl.tm = NULL

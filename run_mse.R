@@ -252,7 +252,8 @@ if (exists("BB")) {
     
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
     input$ctrl.mp$ctrl.is@args$BB <- TRUE
-    input$ctrl.mp$ctrl.is@args$BB_conditional <- TRUE
+    input$ctrl.mp$ctrl.is@args$BB_check_hcr <- TRUE
+    input$ctrl.mp$ctrl.is@args$BB_check_fc <- TRUE
     input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
     
   }
@@ -263,14 +264,16 @@ if (HCRoption %in% 4:6) {
   input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
   input$ctrl.mp$ctrl.is@args$BB <- TRUE
   input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
+  input$ctrl.mp$ctrl.is@args$BB_check_hcr <- FALSE
+  input$ctrl.mp$ctrl.is@args$BB_check_fc <- FALSE
   
   if (HCRoption %in% 4) {
     
-    input$ctrl.mp$ctrl.is@args$BB_conditional <- FALSE
+    input$ctrl.mp$ctrl.is@args$BB_check_hcr <- TRUE
     
   } else if (HCRoption %in% 5:6) {
     
-    input$ctrl.mp$ctrl.is@args$BB_conditional <- TRUE
+    input$ctrl.mp$ctrl.is@args$BB_check_fc <- TRUE
     
   }
   
@@ -278,7 +281,7 @@ if (HCRoption %in% 4:6) {
 
 if (!is.null(input$iem)) {
     
-    cat(paste0("\nImplementing banking and borrowing.\n\n"))
+  cat(paste0("\nImplementing banking and borrowing.\n\n"))
   
 } else {
   

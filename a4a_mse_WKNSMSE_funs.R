@@ -522,7 +522,9 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
                        fwd_splitLD = TRUE, 
                        ### banking and borrowing
                        BB = FALSE, ### banking and borrowing
-                       BB_conditional = FALSE, ### check status before BB
+                       ### check stock status before applying BB
+                       BB_check_hcr = FALSE, ### check status before forecast
+                       BB_check_fc = FALSE, ### check status after forecast
                        BB_rho, ### definition of BB
                        ### reference points
                        hcrpars = list(),
@@ -547,7 +549,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### year to check SSB in year after advice year
   ### for this additional forecast assume Fsq as target
   ### i.e. target F from HCR twice, in analogy to intermediate year assumption
-  if (isTRUE(BB) & isTRUE(BB_conditional)) {
+  if (isTRUE(BB) & isTRUE(BB_check_fc)) {
     
     ### duplicate last target value
     fwd_trgt <- c(fwd_trgt, tail(fwd_trgt, 1))
@@ -620,7 +622,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### get previous target from tracking
     catch_prev <- tracking["metric.is", ac(yr_target - 1), drop = TRUE]
     
-    ### change in advice in %
+    ### change in advice, % of last advice
     change <- (catch_target / catch_prev) * 100
     
     ### limit changes
@@ -665,7 +667,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   if (isTRUE(BB)) {
     
     ### get current rho
-    BB_rho_i <- tail(rep(BB_rho, length.out = (ay - genArgs$y0 + 1)), 1)
+    BB_rho_i <- tail(rep(BB_rho, length.out = (ay - genArgs$y0)), 1)
     
     ### get catch borrowed last year
     BB_return <- tracking["BB_borrow", ac(ay - 1)]
@@ -691,7 +693,22 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     }
     
     ### conditional banking and borrowing?
-    if (isTRUE(BB_conditional)) {
+    ### first condition: for HCR option A (stability option D2)
+    ### apply BB only if HCR option A1 (not A2) is applied
+    ### i.e. stop BB if SSB is below Btrigger in TAC year
+    
+    ### find iterations where SSB is below Btriggerin TAC year
+    if (isTRUE(BB_check_hcr)) {
+      pos_hcr <- which(c(tail(ssb(stk), 1)) < c(hcrpars["Btrigger"]))
+    } else {
+      pos_hcr <- integer(0)
+    }
+    
+    ### second condition: for HCR options B & C (stability option E2)
+    ### stop BB if either
+    ### - if SSB is below Bpa AND F above Fpa in TAC year
+    ### - if SSB is below Bpa in TAC year and year after
+    if (isTRUE(BB_check_fc)) {
       
       ### get SSB in TAC year
       SSB_TACyr <- sapply(fc, function(x) {
@@ -719,23 +736,26 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
       })
       
       ### check if SSB in TAC year below Bpa AND F above Fpa
-      pos_neg1 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
-                          F_TACyr > c(hcrpars["Fpa"]))
+      pos_fc1 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
+                         F_TACyr > c(hcrpars["Fpa"]))
       ### check if SSB below Bpa in TAC year and year after
-      pos_neg2 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
-                          SSB_TACyr1 < c(hcrpars["Bpa"]))
+      pos_fc2 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
+                         SSB_TACyr1 < c(hcrpars["Bpa"]))
       ### combine both conditions
-      pos_neg <- union(pos_neg1, pos_neg2)
+      pos_fc <- union(pos_fc1, pos_fc2)
       
-      ### if status evaluated as not precautionary
-      ### stop banking and borrowing
-      ### (but still pay back/use from last year)
-      BB_bank[pos_neg] <- 0
-      BB_borrow[pos_neg] <- 0
-      
+    } else {
+      pos_fc <- integer(0)
     }
     
-    # ### correct target catch later in iem module
+    ### get position where BB is stopped
+    pos_stop <- union(pos_hcr, pos_fc)
+    ### stop banking and borrowing
+    ### (but still pay back/use from last year)
+    BB_bank[pos_stop] <- 0
+    BB_borrow[pos_stop] <- 0
+    
+    ### correct target catch later in iem module
     # catch_target <- catch_target - c(BB_return) +
     #   c(BB_bank_use) - c(BB_bank) + c(BB_borrow)
   
