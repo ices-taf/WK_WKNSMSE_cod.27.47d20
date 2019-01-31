@@ -1029,6 +1029,15 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     
   })
   
+  survey_cov <- foreach(iter_i = 1:n) %do% {
+    
+    fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
+    cov <- fit$obj$report()$obsCov
+    
+    return(cov[idx_surveys])
+    
+  }
+  
   ### ---------------------------------------------------------------------- ###
   ### stock.n uncertainty ####
   ### ---------------------------------------------------------------------- ###
@@ -1054,7 +1063,8 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   
   return(list(stock.n = stock.n, harvest = harvest,
               survey_catchability = catchability, catch_sd = catch_sd,
-              survey_sd = survey_sd, proc_error = SdLogN))
+              survey_sd = survey_sd, survey_cov = survey_cov, 
+              proc_error = SdLogN))
   
 }
 
