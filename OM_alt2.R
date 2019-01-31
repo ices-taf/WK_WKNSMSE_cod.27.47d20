@@ -560,12 +560,16 @@ idx <- calc_survey(stk = stk_fwd, idx = idx)
 ### create deviances for indices
 ### first, get template
 idx_dev <- lapply(idx, index)
-### create random noise based on sd
+### create random noise based on covariance
 set.seed(4)
+### loop through survey(s)
 for (idx_i in seq_along(idx_dev)) {
   ### noise
-  idx_dev[[idx_i]][] <- unlist(lapply(lapply(uncertainty$survey_cov, "[[", idx_i), function(x){
-    t(mvrnorm(n = dim(idx_dev[[idx_i]])[2], mu = rep(0, dim(idx_dev[[idx_i]])[1]), Sigma = x))
+  idx_dev[[idx_i]][] <- unlist(lapply(lapply(uncertainty$survey_cov, "[[", idx_i),
+                                      function(x){
+    t(mvrnorm(n = dim(idx_dev[[idx_i]])[2], 
+              mu = rep(0, dim(idx_dev[[idx_i]])[1]), 
+              Sigma = x))
   }))
   ### exponentiate to get from normal to log-normal scale
   idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])

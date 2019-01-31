@@ -1029,6 +1029,10 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
     
   })
   
+  ### ---------------------------------------------------------------------- ###
+  ### surveys - get covariance ####
+  ### ---------------------------------------------------------------------- ###
+  
   . <- capture.output(survey_cov <- foreach(iter_i = 1:n) %do% {
     
     fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
