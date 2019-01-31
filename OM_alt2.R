@@ -140,7 +140,6 @@ dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
-# May need looking at...
 uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
@@ -539,8 +538,6 @@ stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
 ### ------------------------------------------------------------------------ ###
 ### indices ####
 ### ------------------------------------------------------------------------ ###
-### MAY NEED LOOKING AT TO INCLUDE CORRELATED ERRORS
-
 ### use real FLIndices object as template (included in FLfse)
 idx <- cod4_idx
 ### extend for simulation period
@@ -566,11 +563,10 @@ idx_dev <- lapply(idx, index)
 ### create random noise based on sd
 set.seed(4)
 for (idx_i in seq_along(idx_dev)) {
-  ### insert sd
-  idx_dev[[idx_i]][] <- uncertainty$survey_sd[[idx_i]]
   ### noise
-  idx_dev[[idx_i]][] <- stats::rnorm(n = length(idx_dev[[idx_i]]),
-                                     mean = 0, sd = idx_dev[[idx_i]])
+  idx_dev[[idx_i]][] <- unlist(lapply(lapply(uncertainty$survey_cov, "[[", idx_i), function(x){
+    t(mvrnorm(n = dim(idx_dev[[idx_i]])[2], mu = rep(0, dim(idx_dev[[idx_i]])[1]), Sigma = x))
+  }))
   ### exponentiate to get from normal to log-normal scale
   idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
 }
