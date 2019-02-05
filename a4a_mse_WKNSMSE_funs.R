@@ -394,10 +394,15 @@ phcr_WKNSMSE <- function(Btrigger = NULL, Ftrgt = NULL, Bpa = NULL, Fpa = NULL,
                          Blim = NULL, tracking, ...) {
   
   ### coerce existing values into FLPar
-  hcrpars <- list(Btrigger = Btrigger, Ftrgt = Ftrgt, Bpa = Bpa, Fpa = Fpa,
-                  Blim = Blim)
+  hcrpars <- list("Btrigger" = Btrigger, "Ftrgt" = Ftrgt, "Bpa" = Bpa, 
+                  "Fpa" = Fpa, "Blim" = Blim)
   hcrpars <- hcrpars[!sapply(hcrpars, is.null)]
-  hcrpars <- FLPar(hcrpars)
+  hcrpars <- do.call(FLPar, hcrpars)
+  
+  ### if more iterations provided than neccessary, subset
+  if (dims(hcrpars)$iter > dims(tracking)$iter) {
+    hcrpars <- hcrpars[, dimnames(tracking)$iter]
+  }
   
   ### return as list
   ### keep tracking unchanged
@@ -609,8 +614,14 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   })
   
   ### get reference points
-  hcrpars <- FLPar(hcrpars)
-  if (dim(hcrpars)[2] == 1) hcrpars <- propagate(hcrpars, it)
+  hcrpars <- hcrpars[!sapply(hcrpars, is.null)]
+  hcrpars <- do.call(FLPar, hcrpars)
+  ### if more iterations provided than neccessary, subset
+  if (dims(hcrpars)$iter > dims(tracking)$iter) {
+    hcrpars <- hcrpars[, dimnames(tracking)$iter]
+  } else if (isTRUE(dim(hcrpars)[2] < it)) {
+    hcrpars <- propagate(hcrpars, it)
+  }
   
   ### ---------------------------------------------------------------------- ###
   ### TAC constraint ####
