@@ -942,7 +942,10 @@ fwd_WKNSMSE <- function(stk, ctrl,
 ###       scale, even standard deviations.
 ###       Therefore, the values returned from this function are exponentiated
 
-SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
+SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE,
+                            idx_cov = FALSE, ### get idx covariance
+                            catch_est = FALSE ### get SAM catch estimate
+                            ) {
   
   if (!is(fit, "sam")) stop("fit has to be class \"sam\"")
   
@@ -1093,14 +1096,21 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### surveys - get covariance ####
   ### ---------------------------------------------------------------------- ###
   
-  . <- capture.output(survey_cov <- foreach(iter_i = 1:n) %do% {
+  if (isTRUE(idx_cov)) {
+    . <- capture.output(survey_cov <- foreach(iter_i = 1:n) %do% {
+      
+      fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
+      cov <- fit$obj$report()$obsCov
+      
+      return(cov[idx_surveys])
+      
+    })
+  
+  } else {
     
-    fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
-    cov <- fit$obj$report()$obsCov
+    idx_cov <- NULL
     
-    return(cov[idx_surveys])
-    
-  })
+  }
   
   ### ---------------------------------------------------------------------- ###
   ### stock.n uncertainty ####
@@ -1125,10 +1135,48 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE) {
   ### logSdLogN (2 values per sim)
   ### logSdLogFsta (1)
   
+  ### ---------------------------------------------------------------------- ###
+  ### get catch estimates ####
+  ### ---------------------------------------------------------------------- ###
+  
+  if (isTRUE(catch_est)) {
+    
+    ### catch fleet index/indices
+    catch_fleets <- which(fit$data$fleetTypes == 0)
+    catch_desc <- fit$data$aux
+    
+    
+    . <- capture.output(res_n <- foreach(iter_i = 1:n, .combine = c
+                                         ) %do% {
+      
+      fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
+      tmp <- cbind(fit$data$aux, est = fit$obj$report()$predObs)
+      tmp <- tmp[tmp[, 2] == catch_fleets, ]
+      tmp <- stats::aggregate(est ~ age + year, tmp,
+                              FUN = sum)
+      tmp_full <- expand.grid(age = unique(tmp$age),
+                         year = unique(tmp$year))
+      tmp <- merge(x = tmp, y = tmp_full, all = TRUE)
+      tmp <- tmp[order(tmp$year, tmp$age), ]
+      return(tmp$est)
+      
+    })
+    catch_n <- FLQuant(NA, 
+      dimnames = list(year = rownames(fit$data$catchMeanWeight), 
+                      age = colnames(fit$data$catchMeanWeight), 
+                      iter = seq(n)))
+    catch_n[] <- exp(res_n)
+  
+  } else {
+    
+    catch_n <- NULL
+  
+  }
+  
   return(list(stock.n = stock.n, harvest = harvest,
               survey_catchability = catchability, catch_sd = catch_sd,
               survey_sd = survey_sd, survey_cov = survey_cov, 
-              proc_error = SdLogN))
+              proc_error = SdLogN, cach_n = catch_n))
   
 }
 

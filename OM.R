@@ -154,6 +154,12 @@ max(fbar(stk))
 max(harvest(stk))
 # 2.086832 in year 2001 for age 6 (plusgroup)
 
+### get estimated catch numbers
+catch_n <- uncertainty$cach_n
+catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
+  catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
+
+
 ### ------------------------------------------------------------------------ ###
 ### check MCMC approach ####
 ### ------------------------------------------------------------------------ ###
@@ -697,6 +703,8 @@ saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
 # cod4_conf_sam_no_mult <- readRDS(file = paste0(input_path, 
 #                                                "cod4_conf_sam_no_mult"))
+### catch numbers
+saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
 save.image(file = paste0(input_path, "image.RData"))
 
 ### ------------------------------------------------------------------------ ###
