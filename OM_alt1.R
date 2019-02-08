@@ -30,12 +30,15 @@ source("a4a_mse_WKNSMSE_funs.R")
 dir.create(path = "input/cod4_alt1", recursive = TRUE)
 dir.create(path = "output/runs/cod4_alt1", recursive = TRUE)
 
+### create plots and print to screen?
+verbose <- TRUE
+
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations/replicates
-n <- 100
+n <- 1000
 ### number of years
 n_years <- 20
 ### last data year
@@ -48,9 +51,11 @@ yr_data <- 2018
 ### recreates the WGNSSK2018 cod assessment
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
 
-is(fit)
-fit
-plot(fit)
+if (isTRUE(verbose)) {
+  is(fit)
+  fit
+  plot(fit)
+}
 
 ### extract model parameters and use them in the simulation as starting values
 sam_initial <- sam_getpar(fit)
@@ -99,7 +104,7 @@ cod4_conf_sam_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in%
 fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
                 conf = cod4_conf_sam_no_mult)
 ### compare results
-summary(fit2) / summary(fit)
+if (isTRUE(verbose)) summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
 ### ------------------------------------------------------------------------ ###
@@ -110,12 +115,12 @@ summary(fit2) / summary(fit)
 ### the catch multiplier, 
 ### the results (stock numbers & harvest) are used from the real WGNSSK fit
 stk <- SAM2FLStock(object = fit, stk = cod4_stk2)
-summary(stk)
+if (isTRUE(verbose)) summary(stk)
 
 ### set units
 units(stk)[1:17] <- as.list(c(rep(c("t", "1000", "kg"), 4),
                               "", "", "f", "", ""))
-plot(stk)
+if (isTRUE(verbose)) plot(stk)
 
 ### save for later comparison
 stk_orig <- stk
@@ -141,13 +146,19 @@ harvest(stk)[] <- uncertainty$harvest
 
 ### catch noise added later
 
-plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### maximum observed F
 max(fbar(stk))
 # 1.359563 in year 1999 with 10,000 iterations
 max(harvest(stk))
 # 2.086832 in year 2001 for age 6 (plusgroup)
+
+### get estimated catch numbers
+catch_n <- uncertainty$cach_n
+catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
+  catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
+
 
 ### ------------------------------------------------------------------------ ###
 ### check MCMC approach ####
@@ -302,7 +313,7 @@ mat(stk_stf)[, ac(2018)] <- mat(stk_orig)[, ac(2018)]
 ### use different samples for selectivity
 harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
 
-plot(stk_stf)
+if (isTRUE(verbose)) plot(stk_stf)
 
 ### ------------------------------------------------------------------------ ###
 ### stock recruitment ####
@@ -319,108 +330,115 @@ suppressWarnings(. <- capture.output(sr <- fmle(sr)))
 # cl <- makeCluster(10)
 # registerDoParallel(cl)
 # sr <- fmle_parallel(sr, cl)
+# ### run again for failed iterations
+# pos_error <- which(is.na(params(sr)["a"]))
+# sr_corrected <- fmle(FLCore::iter(sr, pos_error))
+# sr[,,,,, pos_error] <- sr_corrected[]
+# params(sr)[, pos_error] <- params(sr_corrected)
 
-plot(sr)
-### check breakpoints
-summary(params(sr)["b"])
-
-### plot model and data
-as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
-  mutate(age = NULL,
-         year = ifelse(qname == "SSB", year + 1, year)) %>%
-  tidyr::spread(key = qname, value = data) %>%
-  ggplot() +
-  geom_point(aes(x = SSB, y = rec, group = iter), 
-             alpha = 0.5, colour = "grey", shape = 1) +
-  geom_line(aes(x = SSB, y = fitted, group = iter)) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-### Check extent of autocorrelation
-# Some autocorrelation
-acf(window(stock.n(stk_orig)[1], start = 1988))
-
-### Check method proposed for generating recruitment compares with past recruitment estimates
-test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
-test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
-test <- tidyr::spread(test, key = qname, value = data)
-test <- test[complete.cases(test),]
-test$res <- test$rres <- rep(NA, nrow(test))
-
-# Generate residuals for future recruitments
-foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
-        .errorhandling = "pass") %do% {
-          
-          set.seed(iter_i^2)
-          
-          ### get residuals for current iteration
-          res_i <- c(FLCore::iter(residuals(sr), iter_i))
-          res_i <- res_i[!is.na(res_i)]
-          
-          ### calculate kernel density of residuals
-          density <- density(x = res_i)
-          ### sample residuals
-          mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
-          ### "smooth", i.e. sample from density distribution
-          rres <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
-          
-          # ### calculate serial correlation
-          # res_y <- res_i[-length(res_i)]
-          # res_yp1 <- res_i[-1]
-          # rho <- sum(res_y * res_yp1) / sqrt(sum(res_y^2) * sum(res_yp1^2))
-          # 
-          # ### generate autocorrelated residuals
-          # res <- res_i
-          # res[2:length(res)] <- 0
-          # for (r in 2:length(res)){
-          #   res[r] <- rho * res[r-1] + sqrt(1 - rho^2) * rres[r]
-          # }
-          
-          test$rres[test$iter==iter_i] <- rres
-          test$res[test$iter==iter_i] <- rres
-          
-        }
-
-# Generate future recruitments from past SSBs and generated residuals
-test$future <- test$fitted * exp(test$res)
-
-# 10 randomly selected iters for plotting
-# should probably increase the number later
-i_samp <- sample(seq(dim(sr)[6]), 20, replace=FALSE)
-
-# Plot past and future stock recruit pairs for selected iters
-ggplot(test[is.element(test$iter, i_samp),]) +
-  geom_point(aes(x = SSB, y = rec), 
-             alpha = 0.5, colour = "red", shape = 19) +
-  geom_point(aes(x = SSB, y = future), 
-             alpha = 0.5, colour = "black", shape = 19) +
-  geom_line(aes(x = SSB, y = fitted)) +
-  facet_wrap(~iter) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Empirical cumulative distributions for the same iters
-ggplot(test[is.element(test$iter, i_samp),]) +
-  stat_ecdf(aes(rec), geom = "step", colour = "red") +
-  stat_ecdf(aes(future), geom = "step", colour = "black") +
-  facet_wrap(~iter) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Combine previous two plots over iters
-# Stock recruit pairs
-ggplot(test) +
-  geom_point(aes(x = SSB, y = rec), 
-             alpha = 0.5, colour = "red", shape = 19) +
-  geom_point(aes(x = SSB, y = future), 
-             alpha = 0.5, colour = "black", shape = 19) +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-# Empirical cumulative distribution
-ggplot(test) +
-  stat_ecdf(aes(rec), geom = "step", colour = "red") +
-  stat_ecdf(aes(future), geom = "step", colour = "black") +
-  theme_bw() + xlim(0, NA) + ylim(0, NA)
-
-rm(test, i_samp)
-
+if (isTRUE(verbose)) {
+  
+  plot(sr)
+  ### check breakpoints
+  summary(params(sr)["b"])
+  
+  ### plot model and data
+  as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb)) %>%
+    mutate(age = NULL,
+           year = ifelse(qname == "SSB", year + 1, year)) %>%
+    tidyr::spread(key = qname, value = data) %>%
+    ggplot() +
+    geom_point(aes(x = SSB, y = rec, group = iter), 
+               alpha = 0.5, colour = "grey", shape = 1) +
+    geom_line(aes(x = SSB, y = fitted, group = iter)) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  ### Check extent of autocorrelation
+  # Some autocorrelation
+  acf(window(stock.n(stk_orig)[1], start = 1988))
+  
+  ### Check method proposed for generating recruitment compares with past recruitment estimates
+  test <- as.data.frame(FLQuants(fitted = sr@fitted, rec = sr@rec, SSB = sr@ssb))
+  test <- mutate(test, age = NULL, year = ifelse(qname == "SSB", year + 1, year))
+  test <- tidyr::spread(test, key = qname, value = data)
+  test <- test[complete.cases(test),]
+  test$res <- test$rres <- rep(NA, nrow(test))
+  
+  # Generate residuals for future recruitments
+  foreach(iter_i = seq(dim(sr)[6]), .packages = "FLCore", 
+          .errorhandling = "pass") %do% {
+            
+            set.seed(iter_i^2)
+            
+            ### get residuals for current iteration
+            res_i <- c(FLCore::iter(residuals(sr), iter_i))
+            res_i <- res_i[!is.na(res_i)]
+            
+            ### calculate kernel density of residuals
+            density <- density(x = res_i)
+            ### sample residuals
+            mu <- sample(x = res_i, size = length(res_i), replace = TRUE)
+            ### "smooth", i.e. sample from density distribution
+            rres <- rnorm(n = length(res_i), mean = mu, sd = density$bw)
+            
+            # ### calculate serial correlation
+            # res_y <- res_i[-length(res_i)]
+            # res_yp1 <- res_i[-1]
+            # rho <- sum(res_y * res_yp1) / sqrt(sum(res_y^2) * sum(res_yp1^2))
+            # 
+            # ### generate autocorrelated residuals
+            # res <- res_i
+            # res[2:length(res)] <- 0
+            # for (r in 2:length(res)){
+            #   res[r] <- rho * res[r-1] + sqrt(1 - rho^2) * rres[r]
+            # }
+            
+            test$rres[test$iter==iter_i] <- rres
+            test$res[test$iter==iter_i] <- rres
+            
+          }
+  
+  # Generate future recruitments from past SSBs and generated residuals
+  test$future <- test$fitted * exp(test$res)
+  
+  # 10 randomly selected iters for plotting
+  # should probably increase the number later
+  i_samp <- sample(seq(dim(sr)[6]), 20, replace=FALSE)
+  
+  # Plot past and future stock recruit pairs for selected iters
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    geom_point(aes(x = SSB, y = rec), 
+               alpha = 0.5, colour = "red", shape = 19) +
+    geom_point(aes(x = SSB, y = future), 
+               alpha = 0.5, colour = "black", shape = 19) +
+    geom_line(aes(x = SSB, y = fitted)) +
+    facet_wrap(~iter) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Empirical cumulative distributions for the same iters
+  ggplot(test[is.element(test$iter, i_samp),]) +
+    stat_ecdf(aes(rec), geom = "step", colour = "red") +
+    stat_ecdf(aes(future), geom = "step", colour = "black") +
+    facet_wrap(~iter) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Combine previous two plots over iters
+  # Stock recruit pairs
+  ggplot(test) +
+    geom_point(aes(x = SSB, y = rec), 
+               alpha = 0.5, colour = "red", shape = 19) +
+    geom_point(aes(x = SSB, y = future), 
+               alpha = 0.5, colour = "black", shape = 19) +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  # Empirical cumulative distribution
+  ggplot(test) +
+    stat_ecdf(aes(rec), geom = "step", colour = "red") +
+    stat_ecdf(aes(future), geom = "step", colour = "black") +
+    theme_bw() + xlim(0, NA) + ylim(0, NA)
+  
+  rm(test, i_samp)
+}
 
 ### generate residuals for MSE
 ### years with missing residuals
@@ -469,7 +487,7 @@ residuals(sr)[, yrs_res] <- unlist(res_new)
 residuals(sr) <- exp(residuals(sr))
 sr_res <- residuals(sr)
 
-plot(sr_res)
+if (isTRUE(verbose)) plot(sr_res)
 
 ### ------------------------------------------------------------------------ ###
 ### process noise ####
@@ -602,23 +620,27 @@ idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <-
   idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2017] /
   index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam@index)$year <= 2017]
 
-### compare simulated to original survey(s)
-as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
-                       cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
-                       sim_q1 = (index(idx$IBTS_Q1_gam)),
-                       sim_q3 = (index(idx$IBTS_Q3_gam))
-)) %>%
-  mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
-         source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
-  filter(year <= 2019) %>%
-  ggplot(aes(x = year, y = data, colour = source)) +
-  facet_grid(paste("age", age) ~ paste("IBTS", survey), scales = "free_y") +
-  stat_summary(fun.y = quantile, fun.args = 0.25, geom = "line",
-               alpha = 0.5) +
-  stat_summary(fun.y = quantile, fun.args = 0.75, geom = "line",
-               alpha = 0.5) +
-  stat_summary(fun.y = median, geom = "line") +
-  theme_bw()
+if (isTRUE(verbose)) {
+
+  ### compare simulated to original survey(s)
+  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
+                         cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
+                         sim_q1 = (index(idx$IBTS_Q1_gam)),
+                         sim_q3 = (index(idx$IBTS_Q3_gam))
+  )) %>%
+    mutate(survey = ifelse(grepl(x = qname, pattern = "*_q1$"), "Q1", "Q3"),
+           source = ifelse(grepl(x = qname, pattern = "^sim*"), "sim", "data")) %>%
+    filter(year <= 2019) %>%
+    ggplot(aes(x = year, y = data, colour = source)) +
+    facet_grid(paste("age", age) ~ paste("IBTS", survey), scales = "free_y") +
+    stat_summary(fun.y = quantile, fun.args = 0.25, geom = "line",
+                 alpha = 0.5) +
+    stat_summary(fun.y = quantile, fun.args = 0.75, geom = "line",
+                 alpha = 0.5) +
+    stat_summary(fun.y = median, geom = "line") +
+    theme_bw()
+
+}
 
 ### check survey
 # idx0 <- calc_survey(stk = stk_fwd, idx = idx)
@@ -650,7 +672,7 @@ catch_res <- exp(catch_res)
 ### -> remove deviation
 catch_res[, dimnames(catch_res)$year <= 2017] <- 1
 
-plot(catch_res)
+if (isTRUE(verbose)) plot(catch_res)
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
@@ -697,162 +719,135 @@ saveRDS(stk_oem, file = paste0(input_path, "stk_oem.rds"))
 saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 ### sam configuration
 saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
+### catch numbers
+saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
+save.image(file = paste0(input_path, "image.RData"))
+
+# stk_fwd <- readRDS(file = paste0(input_path, "stk.rds"))
+# sr <- readRDS(file = paste0(input_path, "sr.rds"))
+# sr_res <- readRDS(file = paste0(input_path, "sr_res.rds"))
+# idx <- readRDS(file = paste0(input_path, "idx.rds"))
+# idx_dev <- readRDS(file = paste0(input_path, "idx_dev.rds"))
+# catch_res <- readRDS(file = paste0(input_path, "catch_res.rds"))
+# proc_res <- readRDS(file = paste0(input_path, "proc_res.rds"))
+# stk_oem <- readRDS(file = paste0(input_path, "stk_oem.rds"))
+# sam_initial <- readRDS(file = paste0(input_path, "sam_initial.rds"))
+# cod4_conf_sam_no_mult <- readRDS(file = paste0(input_path, 
+#                                                "cod4_conf_sam_no_mult"))
+
+### ------------------------------------------------------------------------ ###
+### prepare objects for new a4a standard mse package ####
+### ------------------------------------------------------------------------ ###
+### https://github.com/flr/mse
+
+### save workspace to start from here
+# save.image(file = "input/cod4/image_10.RData")
+# load(file = "input/cod4/image_10.RData")
+
+### reference points
+refpts_mse <- list(Btrigger = 150000,
+                   Ftrgt = 0.31,
+                   Fpa = 0.39,
+                   Bpa = 150000,
+                   Blim = 107000)
+### some specifications for short term forecast with SAM
+cod4_stf_def <- list(fwd_yrs_average = -3:0,
+                     fwd_yrs_rec_start = 1998,
+                     fwd_yrs_sel = -3:-1,
+                     fwd_yrs_lf_remove = -2:-1,
+                     fwd_splitLD = TRUE)
+
+### some arguments (passed to mp())
+genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+                y0 = dims(stk_fwd)$minyear, ### first data year
+                iy = yr_data, ### first simulation (intermediate) year
+                nsqy = 3, ### not used, but has to provided
+                nblocks = 1, ### block for parallel processing
+                seed = 1 ### random number seed before starting MSE
+)
+
+### operating model
+om <- FLom(stock = stk_fwd, ### stock 
+           sr = sr, ### stock recruitment and precompiled residuals
+           projection = mseCtrl(method = fwd_WKNSMSE, 
+                                args = list(maxF = 2,
+                                            ### process noise on stock.n
+                                            proc_res = "fitted"
+                                ))
+)
+
+### observation (error) model
+oem <- FLoem(method = oem_WKNSMSE,
+             observations = list(stk = stk_oem, idx = idx), 
+             deviances = list(stk = FLQuants(catch.dev = catch_res), 
+                              idx = idx_dev),
+             args = list(idx_timing = c(0, -1),
+                         catch_timing = -1,
+                         use_catch_residuals = TRUE, 
+                         use_idx_residuals = TRUE,
+                         use_stk_oem = TRUE))
+### implementation error model (banking and borrowing)
+# iem <- FLiem(method = iem_WKNSMSE, 
+#              args = list(BB = TRUE))
+
+### default management
+ctrl_obj <- mpCtrl(list(
+  ctrl.est = mseCtrl(method = SAM_wrapper,
+                     args = c(### short term forecast specifications
+                       forecast = TRUE, 
+                       fwd_trgt = "fsq", fwd_yrs = 1, 
+                       cod4_stf_def,
+                       ### speeding SAM up
+                       newtonsteps = 0, rel.tol = 0.001,
+                       par_ini = list(sam_initial),
+                       track_ini = TRUE, ### store ini for next year
+                       ### SAM model specifications
+                       conf = list(cod4_conf_sam_no_mult),
+                       parallel = FALSE ### TESTING ONLY
+                     )),
+  ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
+                      args = refpts_mse),
+  ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
+  ctrl.is = mseCtrl(method = is_WKNSMSE, 
+                    args = c(hcrpars = list(refpts_mse),
+                             ### for short term forecast
+                             fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
+                             cod4_stf_def#,
+                             ### TAC constraint
+                             #TAC_constraint = TRUE,
+                             #lower = -Inf, upper = Inf,
+                             #Btrigger_cond = FALSE,
+                             ### banking and borrowing 
+                             #BB = TRUE,
+                             #BB_check_hcr = FALSE,
+                             #BB_check_fc = TRUE,
+                             #BB_rho = list(c(-0.1, 0.1))
+                    ))#,
+  #ctrl.tm = NULL
+))
+### additional tracking metrics
+tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
+
+### save mse objects
+input <- list(om = om, oem = oem, ctrl.mp = ctrl_obj,
+              genArgs = genArgs, tracking = tracking_add)
+saveRDS(object = input, 
+        file = paste0(input_path, "base_run.rds"))
+# input <- readRDS(paste0(input_path, "/base_run.rds"))
+
+### ------------------------------------------------------------------------ ###
+### run MSE ####
+### ------------------------------------------------------------------------ ###
 
 
-# ### ------------------------------------------------------------------------ ###
-# ### prepare objects for new a4a standard mse package ####
-# ### ------------------------------------------------------------------------ ###
-# ### https://github.com/flr/mse
-# 
-# ### save workspace to start from here
-# # save.image(file = "input/cod4/image_10.RData")
-# # load(file = "input/cod4/image_10.RData")
-# 
-# ### reference points
-# refpts_mse <- list(Btrigger = 150000,
-#                    Ftrgt = 0.31,
-#                    Fpa = 0.39,
-#                    Bpa = 150000)
-# ### some specifications for short term forecast with SAM
-# cod4_stf_def <- list(fwd_yrs_average = -3:0,
-#                      fwd_yrs_rec_start = 1998,
-#                      fwd_yrs_sel = -3:-1,
-#                      fwd_yrs_lf_remove = -2:-1,
-#                      fwd_splitLD = TRUE)
-# 
-# ### some arguments (passed to mp())
-# genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
-#                 y0 = dims(stk_fwd)$minyear, ### first data year
-#                 iy = yr_data, ### first simulation (intermediate) year
-#                 nsqy = 3, ### not used, but has to provided
-#                 nblocks = 1, ### block for parallel processing
-#                 seed = 1 ### random number seed before starting MSE
-# )
-# 
-# ### operating model
-# om <- FLom(stock = stk_fwd, ### stock 
-#            sr = sr, ### stock recruitment and precompiled residuals
-#            projection = mseCtrl(method = fwd_WKNSMSE, 
-#                                 args = list(maxF = 2,
-#                                             ### process noise on stock.n
-#                                             proc_res = "fitted"
-#                                 ))
-# )
-# 
-# ### observation (error) model
-# oem <- FLoem(method = oem_WKNSMSE,
-#              observations = list(stk = stk_oem, idx = idx), 
-#              deviances = list(stk = FLQuants(catch.dev = catch_res), 
-#                               idx = idx_dev),
-#              args = list(idx_timing = c(0, -1),
-#                          catch_timing = -1,
-#                          use_catch_residuals = TRUE, 
-#                          use_idx_residuals = TRUE,
-#                          use_stk_oem = TRUE))
-# ### implementation error model (banking and borrowing)
-# # iem <- FLiem(method = iem_WKNSMSE, 
-# #              args = list(BB = TRUE))
-# 
-# ### default management
-# ctrl_obj <- mpCtrl(list(
-#   ctrl.est = mseCtrl(method = SAM_wrapper,
-#                      args = c(### short term forecast specifications
-#                        forecast = TRUE, 
-#                        fwd_trgt = "fsq", fwd_yrs = 1, 
-#                        cod4_stf_def,
-#                        ### speeding SAM up
-#                        newtonsteps = 0, rel.tol = 0.001,
-#                        par_ini = list(sam_initial),
-#                        track_ini = TRUE, ### store ini for next year
-#                        ### SAM model specifications
-#                        conf = list(cod4_conf_sam_no_mult),
-#                        parallel = TRUE ### TESTING ONLY
-#                      )),
-#   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
-#                       args = refpts_mse),
-#   ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-#   ctrl.is = mseCtrl(method = is_WKNSMSE, 
-#                     args = c(hcrpars = list(refpts_mse),
-#                              ### for short term forecast
-#                              fwd_trgt = c("fsq", "hcr"), fwd_yrs = 2,
-#                              cod4_stf_def,
-#                              ### TAC constraint
-#                              TAC_constraint = TRUE,
-#                              lower = -Inf, upper = Inf,
-#                              Btrigger_cond = FALSE,
-#                              ### banking and borrowing 
-#                              BB = TRUE,
-#                              BB_conditional = TRUE,
-#                              BB_rho = list(c(-0.1, 0.1))
-#                     )),
-#   ctrl.tm = NULL
-# ))
-# ### additional tracking metrics
-# tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
-# 
-# ### try running mse
-# # library(doParallel)
-# # cl <- makeCluster(10)
-# # registerDoParallel(cl)
-# 
-# ### run MSE
-# ### WARNING: takes a while...
-# ### check normal execution
-# res1 <- mp(om = om,
-#            oem = oem,
-#            iem = iem,
-#            ctrl.mp = ctrl_obj,
-#            genArgs = genArgs,
-#            tracking = tracking_add)
-# ### check mpParallel function
-# # resp1 <- mpParallel(om = om,
-# #                     oem = oem,
-# #                     iem = iem,
-# #                     ctrl.mp = ctrl_obj,
-# #                     genArgs = genArgs,
-# #                     tracking = tracking_add)
-# # 
-# # ### split into 2 parts
-# # genArgs$nblocks <- 2
-# # resp2 <- mpParallel(om = om,
-# #                     oem = oem,
-# #                     ctrl.mp = ctrl_obj,
-# #                     genArgs = genArgs,
-# #                     tracking = tracking_add)
-# # ### execute in parallel
-# # library(doParallel)
-# # cl <- makeCluster(2)
-# # registerDoParallel(cl)
-# # ### load packages and additional functions into workers
-# # clusterEvalQ(cl = cl, expr = {
-# #   library(mse)
-# #   library(FLash)
-# #   library(FLfse)
-# #   library(stockassessment)
-# #   library(foreach)
-# #   library(doRNG)
-# #   source("a4a_mse_WKNSMSE_funs.R")
-# # })
-# # ### run MSE
-# # resp3 <- mpParallel(om = om,
-# #                     oem = oem,
-# #                     ctrl.mp = ctrl_obj,
-# #                     genArgs = genArgs,
-# #                     tracking = tracking_add)
-# # ### try reproducible parallel execution
-# # library(doRNG)
-# # registerDoRNG(123) 
-# # resp4 <- mpParallel(om = om,
-# #                     oem = oem,
-# #                     ctrl.mp = ctrl_obj,
-# #                     genArgs = genArgs,
-# #                     tracking = tracking_add)
-# # registerDoRNG(123) 
-# # resp5 <- mpParallel(om = om,
-# #                     oem = oem,
-# #                     ctrl.mp = ctrl_obj,
-# #                     genArgs = genArgs,
-# #                     tracking = tracking_add)
-# 
+### run MSE
+### WARNING: takes a while...
+### check normal execution
+res1 <- mp(om = input$om,
+           oem = input$oem,
+           #iem = iem,
+           ctrl.mp = input$ctrl.mp,
+           genArgs = input$genArgs,
+           tracking = input$tracking)
 # ### create Rmarkdown file
 # # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))

@@ -18,9 +18,9 @@ library(FLfse)
 library(stockassessment)
 library(ggplotFL)
 library(FLAssess)
-# library(mse)
+library(mse)
 ### load files from package mse for easier debugging
-devtools::load_all("../mse/")
+# devtools::load_all("../mse/")
 library(FLash)
 library(tidyr)
 library(dplyr)
@@ -675,37 +675,38 @@ input_path <- paste0("input/cod4/", n, "_", n_years, "/")
 dir.create(input_path)
 ### stock
 saveRDS(stk_fwd, file = paste0(input_path, "stk.rds"))
-# stk_fwd <- readRDS(file = paste0(input_path, "stk.rds"))
 ### stock recruitment
 saveRDS(sr, file = paste0(input_path, "sr.rds"))
-# sr <- readRDS(file = paste0(input_path, "sr.rds"))
 ### recruitment residuals
 saveRDS(sr_res, file = paste0(input_path, "sr_res.rds"))
-# sr_res <- readRDS(file = paste0(input_path, "sr_res.rds"))
 ### surveys
 saveRDS(idx, file = paste0(input_path, "idx.rds"))
-# idx <- readRDS(file = paste0(input_path, "idx.rds"))
 saveRDS(idx_dev, file = paste0(input_path, "idx_dev.rds"))
-# idx_dev <- readRDS(file = paste0(input_path, "idx_dev.rds"))
 ### catch noise
 saveRDS(catch_res, file = paste0(input_path, "catch_res.rds"))
-# catch_res <- readRDS(file = paste0(input_path, "catch_res.rds"))
 ### process error
 saveRDS(proc_res, file = paste0(input_path, "proc_res.rds"))
-# proc_res <- readRDS(file = paste0(input_path, "proc_res.rds"))
 ### observed stock
 saveRDS(stk_oem, file = paste0(input_path, "stk_oem.rds"))
-# stk_oem <- readRDS(file = paste0(input_path, "stk_oem.rds"))
 ### sam initial parameters
 saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
-# sam_initial <- readRDS(file = paste0(input_path, "sam_initial.rds"))
 ### sam configuration
 saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
-# cod4_conf_sam_no_mult <- readRDS(file = paste0(input_path, 
-#                                                "cod4_conf_sam_no_mult"))
 ### catch numbers
 saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
 save.image(file = paste0(input_path, "image.RData"))
+
+# stk_fwd <- readRDS(file = paste0(input_path, "stk.rds"))
+# sr <- readRDS(file = paste0(input_path, "sr.rds"))
+# sr_res <- readRDS(file = paste0(input_path, "sr_res.rds"))
+# idx <- readRDS(file = paste0(input_path, "idx.rds"))
+# idx_dev <- readRDS(file = paste0(input_path, "idx_dev.rds"))
+# catch_res <- readRDS(file = paste0(input_path, "catch_res.rds"))
+# proc_res <- readRDS(file = paste0(input_path, "proc_res.rds"))
+# stk_oem <- readRDS(file = paste0(input_path, "stk_oem.rds"))
+# sam_initial <- readRDS(file = paste0(input_path, "sam_initial.rds"))
+# cod4_conf_sam_no_mult <- readRDS(file = paste0(input_path, 
+#                                                "cod4_conf_sam_no_mult"))
 
 ### ------------------------------------------------------------------------ ###
 ### prepare objects for new a4a standard mse package ####
