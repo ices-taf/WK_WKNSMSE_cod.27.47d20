@@ -1311,7 +1311,7 @@ fmle_parallel <- function(sr, cl, seed = NULL) {
 #' @export
 #' 
 setGeneric("iav", function(object, period, from, to, summary_per_iter, 
-                           summary) {
+                           summary_year, summary_all) {
   standardGeneric("iav")
 })
 
@@ -1323,7 +1323,8 @@ setMethod(f = "iav",
                         period, ### periodicity, e.g. use every 2nd value 
                         from, to,### year range
                         summary_per_iter, ### summarise values per iteration
-                        summary) {
+                        summary_year,
+                        summary_all) {
   
   ### subset years
   if (!missing(from)) object <- window(object, start = from)
@@ -1353,9 +1354,16 @@ setMethod(f = "iav",
     res <- apply(res, 6, summary_per_iter, na.rm = TRUE)
   }
   
-  ### summarise iterations
-  if (!missing(summary)) {
-    res <- apply(res, 1:5, summary, na.rm = TRUE)
+  ### summarise per year
+  if (!missing(summary_year)) {
+    res <- apply(res, 1:5, summary_year, na.rm = TRUE)
+  }
+  
+  ### summarise over everything
+  if (!missing(summary_all)) {
+    
+    res <- summary_all(res, na.rm = TRUE)
+    
   }
   
   return(res)
