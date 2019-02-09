@@ -137,7 +137,8 @@ dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
-uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
+uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE, 
+                               idx_cov = TRUE, catch_est = TRUE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
