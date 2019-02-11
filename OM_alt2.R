@@ -69,6 +69,9 @@ if (isTRUE(verbose)) {
 sam_initial <- sam_getpar(fit)
 sam_initial$logScale <- numeric(0)
 
+### re-estimate Blim
+blim <- signif(ssbtable(fit)["1996",][[1]], digits = 3)
+
 ### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
 ### ------------------------------------------------------------------------ ###
@@ -145,7 +148,8 @@ dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
-uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
+uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE,
+                               idx_cov = TRUE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
@@ -637,7 +641,7 @@ refpts_mse <- list(Btrigger = 150000,
                    Ftrgt = 0.31,
                    Fpa = 0.39,
                    Bpa = 150000,
-                   Blim = 107000)
+                   Blim = blim)
 ### some specifications for short term forecast with SAM
 cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_yrs_rec_start = 1998,
