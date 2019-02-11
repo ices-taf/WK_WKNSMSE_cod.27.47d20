@@ -118,6 +118,13 @@ fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx,
 if (isTRUE(verbose)) summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
+### SAM configuration for stock assessment (est)
+# So the OM assumes year effects in the survey
+# but the MP does not
+cod4_est_conf_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in%
+                                         c("noScaledYears", "keyScaledYears",
+                                           "keyParScaledYA")]
+
 ### ------------------------------------------------------------------------ ###
 ### create FLStock ####
 ### ------------------------------------------------------------------------ ###
@@ -694,7 +701,7 @@ ctrl_obj <- mpCtrl(list(
                        par_ini = list(sam_initial),
                        track_ini = TRUE, ### store ini for next year
                        ### SAM model specifications
-                       conf = list(cod4_conf_sam_no_mult),
+                       conf = list(cod4_est_conf_no_mult), # don't include correlations in estimation
                        parallel = FALSE ### TESTING ONLY
                      )),
   ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
