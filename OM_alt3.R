@@ -750,7 +750,8 @@ om <- FLom(stock = stk_fwd, ### stock
            projection = mseCtrl(method = fwd_WKNSMSE, 
                                 args = list(maxF = 2,
                                             ### process noise on stock.n
-                                            proc_res = "fitted"
+                                            proc_res = "fitted",
+                                            dd_M = TRUE
                                 ))
 )
 
