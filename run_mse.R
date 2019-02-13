@@ -136,20 +136,20 @@ if (HCRoption %in% 1:6) {
   hcr_vals <- expand.grid(
     Ftrgt = seq(from = 0.1, to = 0.5, by = 0.01),
     Btrigger = seq(from = 110000, to = 210000, by = 10000))
-
+  ### additional combinations after finding yield maximum
+  comb_max <- switch(HCRoption, 
+                     "1" = c(170000, 0.38), 
+                     "2" = c(160000, 0.38), 
+                     "3" = c(170000, 0.38),
+                     "4" = c(190000, 0.41),
+                     "5" = c(130000, 0.36),
+                     "6" = c(140000, 0.36))
+  hcr_vals <- rbind(hcr_vals,
+                    expand.grid(Ftrgt = c(comb_max[2]*0.9, comb_max[2]*1.1,
+                                          0.198, 0.46),
+                                Btrigger = comb_max[1]))
+  
 }
-### additional combinations after finding yield maximum
-comb_max <- switch(HCRoption, 
-                   "1" = c(170000, 0.38), 
-                   "2" = c(160000, 0.38), 
-                   "3" = c(170000, 0.38),
-                   "4" = c(190000, 0.41),
-                   "5" = c(130000, 0.36),
-                   "6" = c(140000, 0.36))
-hcr_vals <- rbind(hcr_vals,
-                  expand.grid(Ftrgt = c(comb_max[2]*0.9, comb_max[2]*1.1,
-                                        0.198, 0.46),
-                              Btrigger = comb_max[1]))
 
 ### implement
 if (exists("HCR_comb")) {
@@ -175,6 +175,23 @@ if (exists("HCR_comb")) {
              "Ftrgt = ", input$ctrl.mp$ctrl.phcr@args$Ftrgt, "\n",
              "Btrigger = ", input$ctrl.mp$ctrl.phcr@args$Btrigger, "\n\n"))
   
+}
+### try uniform grid search with iteration-specific Ftrgt/Btrgigger combination
+if (exists("grid")) {
+  if (isTRUE(as.logical(grid))) {
+    hcr_vals <- expand.grid(Btrigger = seq(from = 100, to = 200, length.out = 25),
+                            Ftrgt = seq(from = 0.1, to = 0.49, length.out = 40))
+    ### set Btrigger
+    Btrigger <- hcr_vals$Btrigger
+    input$ctrl.mp$ctrl.phcr@args$Btrigger <- Btrigger
+    input$ctrl.mp$ctrl.is@args$hcrpars$Btrigger <- Btrigger
+    ### set Ftrgt
+    Ftrgt <- hcr_vals$Ftrgt
+    input$ctrl.mp$ctrl.phcr@args$Ftrgt <- Ftrgt
+    input$ctrl.mp$ctrl.is@args$hcrpars$Ftrgt <- Ftrgt
+    cat(paste0("\nTrying uniform Btrigger/Ftrgt combinations.\n"))
+    
+  }
 }
 
 ### ------------------------------------------------------------------------ ###
