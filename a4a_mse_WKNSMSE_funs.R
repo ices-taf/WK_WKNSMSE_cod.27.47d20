@@ -1370,4 +1370,38 @@ setMethod(f = "iav",
 
 })
 
+### ------------------------------------------------------------------------ ###
+### density-dependent natural mortality ####
+### ------------------------------------------------------------------------ ###
+### calculate density-dependent M from M2 relationships and stock.n 
 
+calculate_ddM <- function(stk,
+                          yr,
+                          relation = "predation.csv") {
+  
+  foreach(iter_i = seq(dim(stk)[6])) %dopar% {
+    
+    M2 <- read.csv(relation)
+    M2$pM2 <- M2$Nprey <- NA
+    M2 <- array(rep(unlist(M2), n), dim=c(nrow(M2), ncol(M2), n))
+    dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
+    
+    M2[,"nPrey", iter_i] <- stock.n(stk)[M2[,"age",iter_i], ac(yr),,,,iter_i] / 1000
+    M2[is.na(M2[,"nPred", iter_i]) ,"nPred", iter_i] <- stock.n(stk)[M2[!is.na(M2[,"predator",iter_i]), "predator", iter_i], ac(yr),,,,iter_i] / 1000
+    M2[, "pM2", iter_i] <- M2[, "intercept", iter_i] + M2[, "logbPrey", iter_i] * log(M2[, "nPrey", iter_i])
+    M2[!is.na(M2[, "logbPred", iter_i]), "pM2", iter_i] <- M2[!is.na(M2[, "logbPred", iter_i]), "pM2", iter_i] + M2[!is.na(M2[, "logbPred", iter_i]), "logbPred", iter_i] * log(M2[!is.na(M2[, "logbPred", iter_i]), "nPred", iter_i])
+    M2[, "pM2", iter_i] <- exp(M2[, "pM2", iter_i])
+    
+    M2 <- as.data.frame(M2[,,iter_i]) %>%
+      group_by(age) %>%
+      summarise(sum(pM2))
+    
+    m(stk)[, ac(yr),,,,iter_i] <- 0
+    m(stk)[M2$age, ac(yr),,,,iter_i] <- M2$`sum(pM2)`
+    m(stk)[, ac(yr),,,,iter_i] <- m(stk)[, ac(yr),,,,iter_i] + 0.2
+    
+  }
+  
+  return(m(stk)[, ac(yr)])
+  
+}
