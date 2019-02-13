@@ -543,8 +543,12 @@ stock.wt(stk_oem)[, ac(proj_yrs)] <-
 ### maturity starts one year later because there is data for 2018
 mat(stk_oem)[, ac(proj_yrs[-1])] <- yearMeans(mat(stk_oem)[, ac(sample_yrs)])
 
-# NEED TO THINK ABOUT WHERE 2018 FALLS IN RELATION TO KEY RUNS AND IMPLEMENT HERE...
-#m(stk_oem)[, ac(proj_yrs)] <- yearMeans(m(stk_oem)[, ac(sample_yrs)])
+### natural mortality
+# last key run was in 2017, with the last data year 2016
+# so m(2017:2019) will be the mean of m(2014:2016) from the OM
+# and m(2020:2022) will be the mean of m(2017:2019) from the OM 
+# equivalent to the next key run being in 2020 with last data year 2019.
+m(stk_oem)[, ac(2017:2018)] <- yearMeans(m(stk_oem)[, ac(2014:2016)])
 
 ### remove stock assessment results
 stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
