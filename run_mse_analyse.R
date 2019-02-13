@@ -177,17 +177,36 @@ grid <- function(dat, HCR = "A",
   dat$risk <- dat[, paste0("risk3_", time)]
   dat$iav <- dat[, paste0("iav_", time)]
   dat$risk1 <- dat[, paste0("risk1_", time)]
-  p1 <- ggplot(data = dat, 
+  dat$Btrigger <- dat$Btrigger / 1000
+  # p1 <- ggplot(data = dat, 
+  #               aes(x = Btrigger, y = Ftrgt, fill = catch)) +
+  #   geom_raster() +
+  #   scale_fill_gradient(paste0(time, "-term\ncatch (median)"), low = "red", 
+  #                       high = "green") +
+  #   geom_text(aes(label = round(catch), colour = risk <= 0.05),
+  #             size = 2) +
+  #   scale_colour_manual("risk <= 0.05", 
+  #                       values = c("FALSE" = "red", "TRUE" = "black")) +
+  #   theme_bw()
+  p1 <- ggplot() +
+    geom_raster(data = dat %>% 
+                  filter(risk <= 0.05) %>%
+                  filter(catch >= 0.95 * max(catch)),
                 aes(x = Btrigger, y = Ftrgt, fill = catch)) +
-    geom_raster() +
-    scale_fill_gradient(paste0(time, "-term\ncatch (median)"), low = "red", 
+    scale_fill_gradient(paste0("yield optimum\narea"), low = "red",
                         high = "green") +
-    geom_text(aes(label = round(catch), colour = risk <= 0.05),
+    geom_text(data = dat, 
+              aes(x = Btrigger, y = Ftrgt, 
+                  label = round(catch), colour = risk <= 0.05),
               size = 2) +
     scale_colour_manual("risk <= 0.05", 
                         values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw()
-    ### risk
+    theme_bw() +
+    facet_wrap(~ paste0("median ", time, "-term catch [t]")) +
+    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    labs(x = expression(B[trigger]~"[1000t]"),
+         y = expression(F[trgt]))
+  ### risk
   p2 <- ggplot(data = dat, 
                 aes(x = Btrigger, y = Ftrgt, fill = risk)) +
     geom_raster(alpha = 0.75) +
@@ -197,7 +216,11 @@ grid <- function(dat, HCR = "A",
               size = 2) +
     scale_colour_manual("risk <= 0.05", 
                         values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw()
+    theme_bw() +
+    facet_wrap(~ paste0(time, "-term risk 3")) +
+    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    labs(x = expression(B[trigger]~"[1000t]"),
+         y = expression(F[trgt]))
   ### iav
   p3 <- ggplot(data = dat, 
                 aes(x = Btrigger, y = Ftrgt, fill = iav)) +
@@ -206,10 +229,15 @@ grid <- function(dat, HCR = "A",
               size = 2) +
     scale_colour_manual("risk <= 0.05",
                         values = c("FALSE" = "red", "TRUE" = "black")) +
-    scale_fill_gradient(paste0(time,"-term\ninter-annual\nvariability of catch",
-                               "\nmedian"),
+    scale_fill_gradient(paste0("median\n", time,
+                               "-term\ninter-annual\ncatch variability"),
                         low = "green", high = "red") +
-    theme_bw()
+    theme_bw() +
+    facet_wrap(~ paste0("median ", time, 
+                        "-term inter-annual\ catch variability")) +
+    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    labs(x = expression(B[trigger]~"[1000t]"),
+         y = expression(F[trgt]))
   ### risk1
   p4 <- ggplot(data = dat, 
                aes(x = Btrigger, y = Ftrgt, fill = risk1)) +
@@ -220,7 +248,11 @@ grid <- function(dat, HCR = "A",
               size = 2) +
     scale_colour_manual("risk <= 0.05", 
                         values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw()
+    theme_bw() +
+    facet_wrap(~ paste0(time, "-term risk 1")) +
+    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    labs(x = expression(B[trigger]~"[1000t]"),
+         y = expression(F[trgt]))
   
   if (isTRUE(add_risk1)) {
     plot_grid(p1, p2, p3, p4, nrow = 2, ncol = 2, align = "hv")
@@ -236,19 +268,19 @@ grid(dat = stats %>%
        filter(HCR == "A" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_A_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_A_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "A" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_A_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_A_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "A" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_A_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_A_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 ### B
@@ -256,19 +288,19 @@ grid(dat = stats %>%
        filter(HCR == "B" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_B_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_B_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "B" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_B_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_B_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "B" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_B_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_B_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 ### C
@@ -276,19 +308,19 @@ grid(dat = stats %>%
        filter(HCR == "C" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_C_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_C_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "C" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_C_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_C_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "C" & BB == FALSE & TACconstr == FALSE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_C_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_C_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 ### AD
@@ -296,19 +328,19 @@ grid(dat = stats %>%
        filter(HCR == "A" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_AD_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_AD_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "A" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_AD_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_AD_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "A" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "A", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_AD_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_AD_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
@@ -317,19 +349,19 @@ grid(dat = stats %>%
        filter(HCR == "B" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_BE_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_BE_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "B" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_BE_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_BE_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "B" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "B", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_BE_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_BE_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
@@ -338,19 +370,19 @@ grid(dat = stats %>%
        filter(HCR == "C" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "long", add_risk1 = FALSE)
-ggsave(filename = "output/runs/cod4/1000_20/grid_CE_long.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_CE_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "C" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/grid_CE_medium.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_CE_medium.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
        filter(HCR == "C" & BB == TRUE & TACconstr == TRUE) %>%
        filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)), 
      HCR = "C", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/grid_CE_short.png", 
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid_CE_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
