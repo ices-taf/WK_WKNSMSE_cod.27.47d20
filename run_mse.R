@@ -288,11 +288,11 @@ res1 <- mp(om = input$om,
 ### save results
 path_out <- paste0("output/runs/cod4/", iters, "_", years)
 dir.create(path = path_out, recursive = TRUE)
-file_out <- paste0("HCR-", input$ctrl.mp$ctrl.hcr@args$option,
-                   "_Ftrgt-", input$ctrl.mp$ctrl.phcr@args$Ftrgt,
-                   "_Btrigger-", input$ctrl.mp$ctrl.phcr@args$Btrigger,
-                   "_TACconstr-", input$ctrl.mp$ctrl.is@args$TAC_constraint,
-                   "_BB-", input$ctrl.mp$ctrl.is@args$BB
+file_out <- paste0("HCR-", input$ctrl.mp$ctrl.hcr@args$option[1],
+                   "_Ftrgt-", input$ctrl.mp$ctrl.phcr@args$Ftrgt[1],
+                   "_Btrigger-", input$ctrl.mp$ctrl.phcr@args$Btrigger[1],
+                   "_TACconstr-", input$ctrl.mp$ctrl.is@args$TAC_constraint[1],
+                   "_BB-", input$ctrl.mp$ctrl.is@args$BB[1]
 )
 
 saveRDS(object = res1, paste0(path_out, "/", file_out, ".rds"))
