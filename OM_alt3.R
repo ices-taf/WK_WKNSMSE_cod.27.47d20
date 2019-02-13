@@ -307,12 +307,36 @@ catch.wt(stk_stf)[, bio_yrs] <- c(catch.wt(stk)[, bio_samples,,,, 1])
 stock.wt(stk_stf)[, bio_yrs] <- c(stock.wt(stk)[, bio_samples,,,, 1])
 landings.wt(stk_stf)[, bio_yrs] <- c(landings.wt(stk)[, bio_samples,,,, 1])
 discards.wt(stk_stf)[, bio_yrs] <- c(discards.wt(stk)[, bio_samples,,,, 1])
-m(stk_stf)[, bio_yrs] <- c(m(stk)[, bio_samples,,,, 1])
 mat(stk_stf)[, bio_yrs] <- c(mat(stk)[, bio_samples,,,, 1])
 ### maturity data for 2018 exists, re-insert real data
 mat(stk_stf)[, ac(2018)] <- mat(stk_orig)[, ac(2018)]
 ### use different samples for selectivity
 harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
+
+
+### NEED TO SET 2018 MS HERE...
+foreach(iter_i = seq(dim(stk_stf)[6])) %dopar% {
+  
+  M2 <- read.csv("predation.csv")
+  M2$pM2 <- M2$Nprey <- NA
+  M2 <- array(rep(unlist(M2), n), dim=c(nrow(M2), ncol(M2), n))
+  dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
+  
+  M2[,"nPrey", iter_i] <- stock.n(stk_stf)[M2[,"age",iter_i], ac(2018),,,,iter_i] / 1000
+  M2[is.na(M2[,"nPred", iter_i]) ,"nPred", iter_i] <- stock.n(stk_stf)[M2[!is.na(M2[,"predator",iter_i]), "predator", iter_i], ac(2018),,,,iter_i] / 1000
+  M2[, "pM2", iter_i] <- M2[, "intercept", iter_i] + M2[, "logbPrey", iter_i] * log(M2[, "nPrey", iter_i])
+  M2[!is.na(M2[, "logbPred", iter_i]), "pM2", iter_i] <- M2[!is.na(M2[, "logbPred", iter_i]), "pM2", iter_i] + M2[!is.na(M2[, "logbPred", iter_i]), "logbPred", iter_i] * log(M2[!is.na(M2[, "logbPred", iter_i]), "nPred", iter_i])
+  M2[, "pM2", iter_i] <- exp(M2[, "pM2", iter_i])
+  
+  M2 <- as.data.frame(M2[,,iter_i]) %>%
+    group_by(age) %>%
+    summarise(sum(pM2))
+  
+  m(stk_stf)[, ac(2018),,,,iter_i] <- 0
+  m(stk_stf)[M2$age, ac(2018),,,,iter_i] <- M2$`sum(pM2)`
+  m(stk_stf)[, ac(2018),,,,iter_i] <- m(stk_stf)[, ac(2018),,,,iter_i] + 0.2
+  
+}
 
 if (isTRUE(verbose)) plot(stk_stf)
 
@@ -538,9 +562,11 @@ discards.wt(stk_oem)[, ac(proj_yrs)] <-
   yearMeans(discards.wt(stk_oem)[, ac(sample_yrs)])
 stock.wt(stk_oem)[, ac(proj_yrs)] <- 
   yearMeans(stock.wt(stk_oem)[, ac(sample_yrs)])
-m(stk_oem)[, ac(proj_yrs)] <- yearMeans(m(stk_oem)[, ac(sample_yrs)])
 ### maturity starts one year later because there is data for 2018
 mat(stk_oem)[, ac(proj_yrs[-1])] <- yearMeans(mat(stk_oem)[, ac(sample_yrs)])
+
+# NEED TO THINK ABOUT WHERE 2018 FALLS IN RELATION TO KEY RUNS AND IMPLEMENT HERE...
+#m(stk_oem)[, ac(proj_yrs)] <- yearMeans(m(stk_oem)[, ac(sample_yrs)])
 
 ### remove stock assessment results
 stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
