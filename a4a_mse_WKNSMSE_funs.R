@@ -1388,13 +1388,13 @@ calculate_ddM <- function(stk,
                           yr,
                           relation = "predation.csv") {
   
+  ### read in M2 relationships
+  M2 <- read.csv(relation)
+  M2$pM2 <- M2$Nprey <- NA
+  M2 <- array(rep(unlist(M2), dim(stk)[6]), dim=c(nrow(M2), ncol(M2), dim(stk)[6]))
+  dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
+  
   foreach(iter_i = seq(dim(stk)[6])) %dopar% {
-    
-    ### read in M2 relationships
-    M2 <- read.csv(relation)
-    M2$pM2 <- M2$Nprey <- NA
-    M2 <- array(rep(unlist(M2), iter_i), dim=c(nrow(M2), ncol(M2), iter_i))
-    dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
     
     ### extract number of predator and prey cod-at-age from stock.n in the specified year (000s)
     M2[,"nPrey", iter_i] <- stock.n(stk)[M2[,"age",iter_i], ac(yr),,,,iter_i]
@@ -1406,14 +1406,14 @@ calculate_ddM <- function(stk,
     M2[, "pM2", iter_i] <- exp(M2[, "pM2", iter_i])
     
     ### sum M2s for each prey age class
-    M2 <- as.data.frame(M2[,,iter_i]) %>%
+    M2age <- as.data.frame(M2[,,iter_i]) %>%
       group_by(age) %>%
       summarise(sum(pM2))
     
     ### overwrite m in the specified year
     ### and add 0.2 for non-predation mortality
     m(stk)[, ac(yr),,,,iter_i] <- 0
-    m(stk)[M2$age, ac(yr),,,,iter_i] <- M2$`sum(pM2)`
+    m(stk)[M2age$age, ac(yr),,,,iter_i] <- M2age$`sum(pM2)`
     m(stk)[, ac(yr),,,,iter_i] <- m(stk)[, ac(yr),,,,iter_i] + 0.2
     
   }
