@@ -1186,6 +1186,31 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE,
                       age = colnames(fit$data$catchMeanWeight), 
                       iter = seq(n)))
     catch_n[] <- exp(res_n)
+    
+    ### apply catch multiplier, if used
+    if (fit$conf$noScaledYears > 0) {
+      
+      ### get catch multiplier dimensions
+      ages_mult <- fit$conf$minAge:fit$conf$maxAge
+      yrs_mult <- fit$conf$keyScaledYears
+      ### get multiplier positions in created data set
+      pos_mult <- which(colnames(dat) == "logScale")
+      ### create catch multiplier FLQuant
+      catch_mult_data <- FLQuant(NA, 
+        dimnames = list(year = fit$conf$keyScaledYears,
+                        age = fit$conf$minAge:fit$conf$maxAge,
+                        iter = seq(nrow(dat))))
+      catch_mult_data[] <- rep(t(dat[, pos_mult]), each = length(ages_mult))
+      ### model values in log scale, exponentiate
+      catch_mult_data <- exp(catch_mult_data)
+      ### for simpler calculations, use catch_n as template
+      catch_mult <- catch_n %=% 1
+      catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+      
+      ### correct catch.n
+      catch_n <- catch_n * catch_mult
+      
+    }
   
   } else {
     
@@ -1196,7 +1221,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE,
   return(list(stock.n = stock.n, harvest = harvest,
               survey_catchability = catchability, catch_sd = catch_sd,
               survey_sd = survey_sd, survey_cov = survey_cov, 
-              proc_error = SdLogN, cach_n = catch_n))
+              proc_error = SdLogN, catch_n = catch_n))
   
 }
 
