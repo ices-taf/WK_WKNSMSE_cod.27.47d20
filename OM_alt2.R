@@ -65,10 +65,6 @@ if (isTRUE(verbose)) {
   plot(fit)
 }
 
-### extract model parameters and use them in the simulation as starting values
-sam_initial <- sam_getpar(fit)
-sam_initial$logScale <- numeric(0)
-
 ### re-estimate Blim (to be used when calculating performance stats)
 blim <- signif(ssbtable(fit)["1996",][[1]], digits = 3)
 
@@ -125,6 +121,13 @@ cod4_est_conf_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in%
                                          c("noScaledYears", "keyScaledYears",
                                            "keyParScaledYA")]
 
+### fit SAM as it is done during the MSE simulation
+fit_est <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
+                   conf = cod4_est_conf_no_mult, 
+                   newtonsteps = 0, rel.tol = 0.001)
+### extract model parameters and use them in the simulation as starting values
+sam_initial <- sam_getpar(fit_est)
+
 ### ------------------------------------------------------------------------ ###
 ### create FLStock ####
 ### ------------------------------------------------------------------------ ###
@@ -156,14 +159,15 @@ dim(stk)
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
 uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE,
-                               idx_cov = TRUE)
+                               idx_cov = TRUE, catch_est = TRUE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
 ### add noise to F
 harvest(stk)[] <- uncertainty$harvest
-
-### catch noise added later
+### add noise to catch numbers
+catch.n(stk)[, dimnames(stk)$year[-dims(stk)$year]] <- uncertainty$catch_n
+catch(stk) <- computeCatch(stk)
 
 if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
@@ -174,7 +178,7 @@ max(harvest(stk))
 # 2.086832 in year 2001 for age 6 (plusgroup)
 
 ### get estimated catch numbers
-catch_n <- uncertainty$cach_n
+catch_n <- uncertainty$catch_n
 catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
   catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
 
@@ -568,29 +572,12 @@ catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
 
 ### for historical period, pass on real observed catch
-### -> remove deviation
-catch_res[, dimnames(catch_res)$year <= 2017] <- 1
+### -> calculate residuals
+catch_res[, dimnames(catch_res)$year <= 2017] <- 
+  window(catch.n(stk_orig), end = 2017) / window(catch.n(stk_fwd), end = 2017)
+#plot(catch.n(stk_fwd) * catch_res)
 
-if (isTRUE(verbose)) plot(catch_res)
-
-### ------------------------------------------------------------------------ ###
-### check SAM ####
-### ------------------------------------------------------------------------ ###
-# 
-# stk_tmp <- window(stk_stf, end = 2018)
-# catch.wt(stk_tmp)[,ac(2018)] <- landings.wt(stk_tmp)[,ac(2018)] <-
-#   discards.wt(stk_tmp)[,ac(2018)] <- NA
-# stk_tmp <- stk_tmp[,,,,, 1:10]
-# idx_tmp <- window(idx, end = 2018)
-# idx_tmp[[2]] <- window(idx_tmp[[2]], end = 2017)
-# idx_tmp <- lapply(idx_tmp, FLCore::iter, 1:10)
-# 
-# fit3 <- FLR_SAM(stk = stk_tmp, 
-#                idx = idx_tmp, conf = cod4_conf_sam)
-# stk3 <- SAM2FLStock(fit3)
-# plot(iter(FLStocks(cod4 = stk, sim = stk3), 1))
-# 
-# 
+if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### ------------------------------------------------------------------------ ###
 ### save OM ####
@@ -617,7 +604,8 @@ saveRDS(stk_oem, file = paste0(input_path, "stk_oem.rds"))
 ### sam initial parameters
 saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 ### sam configuration
-saveRDS(cod4_alt_conf_no_mult, file = paste0(input_path, "cod4_alt_conf_no_mult"))
+saveRDS(cod4_est_conf_no_mult, file = paste0(input_path, 
+                                             "cod4_est_conf_no_mult.rds"))
 ### catch numbers
 saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
 save.image(file = paste0(input_path, "image.RData"))
@@ -631,8 +619,8 @@ save.image(file = paste0(input_path, "image.RData"))
 # proc_res <- readRDS(file = paste0(input_path, "proc_res.rds"))
 # stk_oem <- readRDS(file = paste0(input_path, "stk_oem.rds"))
 # sam_initial <- readRDS(file = paste0(input_path, "sam_initial.rds"))
-# cod4_conf_sam_no_mult <- readRDS(file = paste0(input_path, 
-#                                                "cod4_conf_sam_no_mult"))
+# cod4_est_conf_no_mult <- readRDS(file = paste0(input_path, 
+#                                                "cod4_est_conf_no_mult.rds"))
 
 ### ------------------------------------------------------------------------ ###
 ### prepare objects for new a4a standard mse package ####
