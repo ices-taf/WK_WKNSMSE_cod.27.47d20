@@ -57,9 +57,6 @@ if (isTRUE(verbose)) {
   plot(fit)
 }
 
-### extract model parameters and use them in the simulation as starting values
-sam_initial <- sam_getpar(fit)
-sam_initial$logScale <- numeric(0)
 
 ### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
@@ -107,6 +104,12 @@ fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx,
 if (isTRUE(verbose)) summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
+### fit SAM as it is done during the MSE simulation
+fit_est <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
+                   conf = cod4_conf_sam_no_mult, 
+                   newtonsteps = 0, rel.tol = 0.001)
+### extract model parameters and use them in the simulation as starting values
+sam_initial <- sam_getpar(fit_est)
 ### ------------------------------------------------------------------------ ###
 ### create FLStock ####
 ### ------------------------------------------------------------------------ ###
@@ -137,14 +140,16 @@ dim(stk)
 
 ### add uncertainty estimated by SAM as iterations
 set.seed(1)
-uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE)
+uncertainty <- SAM_uncertainty(fit = fit, n = n, print_screen = FALSE, 
+                               idx_cov = TRUE, catch_est = TRUE)
 ### add noise to stock
 stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
 ### add noise to F
 harvest(stk)[] <- uncertainty$harvest
-
-### catch noise added later
+### add noise to catch numbers
+catch.n(stk)[, dimnames(stk)$year[-dims(stk)$year]] <- uncertainty$catch_n
+catch(stk) <- computeCatch(stk)
 
 if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
@@ -160,101 +165,6 @@ catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <-
   catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
 
 
-### ------------------------------------------------------------------------ ###
-### check MCMC approach ####
-### ------------------------------------------------------------------------ ###
-# library(tmbstan) # cran package
-# 
-# ### create template stock for storing results
-# MCMC_iter <- n
-# MCMC_warmup <- 1000
-# stk_MCMC <- propagate(stk, MCMC_iter)
-# 
-# ### run MCMC
-# system.time(mcmc <- tmbstan(fit$obj, chains = 1, iter = MCMC_warmup + MCMC_iter, 
-#                             warmup = MCMC_warmup, 
-#                             seed = 1, control = list(max_treedepth = 15)))
-# ### extract 
-# mc <- extract(mcmc, inc_warmup = FALSE, permuted = FALSE)
-# 
-# table(gsub(x = dimnames(mc)$parameters, pattern = "\\[[0-9]{1,}\\]", 
-#            replacement = ""))
-# # itrans_rho         logF      logFpar         logN     logScale logSdLogFsta 
-# #          1          336            9          336           13            2 
-# # logSdLogN  logSdLogObs         lp__ 
-# #         2            7            1 
-# ### gives N and F @age
-# ### scale for 
-# 
-# 
-# ### find positions for results in MCMC
-# nms <- dimnames(mc)$parameters
-# F_pos <- grep(x = nms, pattern = "logF\\[[0-9]{1,3}\\]$")
-# N_pos <- grep(x = nms, pattern = "logN\\[[0-9]{1,3}\\]$")
-# factor_pos <- grep(x = nms, pattern = "logScale\\[[0-9]{1,2}\\]$")
-# 
-# ### in the MCMC results age and years are mixed within the same row,
-# ### each row represents one iteration
-# ### this needs to be reformatted to be useful...
-# 
-# ### fishing mortality:
-# harvest(stk_MCMC)[] <- aperm(array(data = c(exp(mc[,, F_pos])),
-#                                    dim = dim(harvest(stk_MCMC))[c(6, 1:5)]),
-#                              perm = c(2:6, 1))
-# 
-# ### stock numbers at age
-# stock.n(stk_MCMC)[] <- aperm(array(data = c(exp(mc[,, N_pos])),
-#                                    dim = dim(stock.n(stk_MCMC))[c(6, 1:5)]),
-#                              perm = c(2:6, 1))
-# stock(stk_MCMC) <- computeStock(stk_MCMC)
-# 
-# ### catch factor
-# ### get ages and years
-# ages <- fit$conf$minAge:fit$conf$maxAge
-# yrs <- fit$conf$keyScaledYears
-# ### get catch factors
-# catch_factor <- lapply(split(exp(mc[,, factor_pos]), seq(MCMC_iter)), 
-#                        function(x) {
-#   x[t(fit$conf$keyParScaledYA + 1)]
-# })
-# catch_factor <- unlist(catch_factor)
-# ### coerce into FLQuant
-# catch_factor <- FLQuant(catch_factor,
-#                       dimnames = dimnames(catch.n(stk_MCMC[ac(ages), ac(yrs)])))
-# ### multiply catch numbers
-# catch.n(stk_MCMC)[ac(ages), ac(yrs)] <- catch_factor * 
-#   catch.n(stk_MCMC)[ac(ages), ac(yrs)]
-# ### split into landings and discards, based on landing fraction
-# lfrac <- propagate((landings.n(stk)[ac(ages), ac(yrs)] / 
-#                       catch.n(stk)[ac(ages), ac(yrs)]), MCMC_iter)
-# landings.n(stk_MCMC)[ac(ages), ac(yrs)] <- catch.n(stk_MCMC)[ac(ages), ac(yrs)] *
-#   lfrac
-# discards.n(stk_MCMC)[ac(ages), ac(yrs)] <- catch.n(stk_MCMC)[ac(ages), ac(yrs)] *
-#   (1 - lfrac)
-# ### update stock
-# catch(stk_MCMC)[, ac(yrs)] <- computeCatch(stk_MCMC)[, ac(yrs)]
-# landings(stk_MCMC)[, ac(yrs)] <- computeLandings(stk_MCMC)[, ac(yrs)]
-# discards(stk_MCMC)[, ac(yrs)] <- computeDiscards(stk_MCMC)[, ac(yrs)]
-# 
-# ### plot MCMC stock
-# plot(stk_MCMC)
-# ### compare with original SAM fit
-# plot(FLStocks(MCMC = stk_MCMC, original = stk_orig))
-# ### compare with first uncertainty approach
-# plot(FLStocks(MCMC = stk_MCMC, original = stk_orig, Cov = stk))
-
-### ------------------------------------------------------------------------ ###
-### try SAM internal "simstudy" ####
-### ------------------------------------------------------------------------ ###
-### "Simulate data from fitted model and re-estimate from each run"
-
-# set.seed(0)
-# system.time(fits <- simstudy(fit = fit, nsim = n))
-# class(fits) <- "sam_list"
-# 
-# stk_sim <- SAM2FLStock(object = fits, stk = cod4_stk2)
-# plot(FLStocks(Cov = stk, simstudy = stk_sim,
-#               original = stk_orig))
 
 ### ------------------------------------------------------------------------ ###
 ### extend stock for MSE simulation ####
@@ -669,10 +579,12 @@ catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
 
 ### for historical period, pass on real observed catch
-### -> remove deviation
-catch_res[, dimnames(catch_res)$year <= 2017] <- 1
+### -> calculate residuals
+catch_res[, dimnames(catch_res)$year <= 2017] <- 
+  window(catch.n(stk_orig), end = 2017) / window(catch.n(stk_fwd), end = 2017)
+#plot(catch.n(stk_fwd) * catch_res)
 
-if (isTRUE(verbose)) plot(catch_res)
+if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
@@ -849,5 +761,5 @@ res1 <- mp(om = input$om,
            ctrl.mp = input$ctrl.mp,
            genArgs = input$genArgs,
            tracking = input$tracking)
-# ### create Rmarkdown file
-# # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
+### create Rmarkdown file
+# knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
