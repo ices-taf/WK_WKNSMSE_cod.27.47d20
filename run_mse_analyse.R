@@ -134,6 +134,40 @@ stats_new$iav_medium <- foreach(x = res_list, .packages = "FLCore",
   iav(object = catch(window(stock(x), start = 2023, end = 2028)), 
       summary_all = mean)
 }
+### SSB
+stats_new$ssb_median_long <- foreach(x = res_list, .packages = "FLCore",
+                                       .combine = "c") %dopar% {
+  median(window(ssb(x@stock), start = 2029))
+}
+stats_new$ssb_median_short <- foreach(x = res_list, .packages = "FLCore",
+                                        .combine = "c") %dopar% {
+  median(window(ssb(x@stock), start = 2019, end = 2023))
+}
+stats_new$ssb_median_medium <- foreach(x = res_list, .packages = "FLCore",
+                                         .combine = "c") %dopar% {
+  median(window(ssb(x@stock), start = 2024, end = 2028))
+}
+
+
+
+
+### time to recovery
+MSYBtrigger <- 150000
+stats_new$recovery_proportion <- foreach(x = res_list, .packages = "FLCore",
+                                   .combine = "c") %dopar% {
+  mean(apply(window(ssb(x@stock), start = 2019) >= MSYBtrigger, 6, max))
+}
+stats_new$recovery_time <- foreach(x = res_list, .packages = "FLCore",
+                                   .combine = "c") %dopar% {
+  median(apply(window(ssb(x@stock), start = 2019)@.Data >= MSYBtrigger, 6, 
+               function(x) {
+    if (any(x)) {
+      which(x)[1]
+    } else {
+      Inf
+    }
+  }))
+}
 ### SAM convergence
 stats_new$conv_failed <- foreach(x = res_list, .packages = "FLCore",
                                 .combine = "c") %dopar% {
@@ -145,11 +179,11 @@ stats_new$F_maxed <- foreach(x = res_list, .packages = "FLCore",
                                  .combine = "c") %dopar% {
   sum(window(fbar(stock(x)), start = 2019) >= 2)
 }
-pos <- which(stats_new$F_maxed != 0)
-stats_new[pos, ]
-plot(stock(res_list[[pos]]))
-pos_iter <- which(apply(fbar(stock(res_list[[pos]])), c(1, 6), max) >= 2)
-plot(stock(res_list[[pos]])[,,,,, pos_iter])
+# pos <- which(stats_new$F_maxed != 0)
+# stats_new[pos, ]
+# plot(stock(res_list[[pos]]))
+# pos_iter <- which(apply(fbar(stock(res_list[[pos]])), c(1, 6), max) >= 2)
+# plot(stock(res_list[[pos]])[,,,,, pos_iter])
 ### F maxed in THREE scenarios, 
 ### in each of them in ONE iteration and ONE time only
 ### HCR B, Btrigger = 110000, Ftrgt = 0.5, iteration 29
@@ -176,6 +210,7 @@ grid <- function(dat, HCR = "A",
   dat$catch <- dat[, paste0("catch_median_", time)]
   dat$risk <- dat[, paste0("risk3_", time)]
   dat$iav <- dat[, paste0("iav_", time)]
+  dat$ssb <- dat[, paste0("ssb_median_", time)]
   dat$risk1 <- dat[, paste0("risk1_", time)]
   dat$Btrigger <- dat$Btrigger / 1000
   # p1 <- ggplot(data = dat, 
@@ -193,7 +228,7 @@ grid <- function(dat, HCR = "A",
                   filter(risk <= 0.05) %>%
                   filter(catch >= 0.95 * max(catch)),
                 aes(x = Btrigger, y = Ftrgt, fill = catch)) +
-    scale_fill_gradient(paste0("yield optimum\narea"), low = "red",
+    scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
                         high = "green") +
     geom_text(data = dat, 
               aes(x = Btrigger, y = Ftrgt, 
@@ -238,8 +273,25 @@ grid <- function(dat, HCR = "A",
     scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
-  ### risk1
+  ### SSB
   p4 <- ggplot(data = dat, 
+               aes(x = Btrigger, y = Ftrgt, fill = ssb)) +
+    geom_raster(alpha = 0.5) +
+    geom_text(aes(label = round(ssb), colour = risk <= 0.05),
+              size = 2) +
+    scale_colour_manual("risk <= 0.05",
+                        values = c("FALSE" = "red", "TRUE" = "black")) +
+    scale_fill_gradient(paste0("median\n", time,
+                               "-term\nSSB [t]"),
+                        low = "red", high = "green") +
+    theme_bw() +
+    facet_wrap(~ paste0("median ", time, 
+                        "-term SSB [t]")) +
+    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    labs(x = expression(B[trigger]~"[1000t]"),
+         y = expression(F[trgt]))
+  ### risk1
+  p5 <- ggplot(data = dat, 
                aes(x = Btrigger, y = Ftrgt, fill = risk1)) +
     geom_raster(alpha = 0.75) +
     scale_fill_gradient(paste0(time, "-term\nrisk 1"), 
@@ -255,9 +307,9 @@ grid <- function(dat, HCR = "A",
          y = expression(F[trgt]))
   
   if (isTRUE(add_risk1)) {
-    plot_grid(p1, p2, p3, p4, nrow = 2, ncol = 2, align = "hv")
+    plot_grid(p1, p2, p3, p5, nrow = 2, ncol = 2, align = "hv")
   } else {
-    plot_grid(p1, p2, p3, nrow = 2, ncol = 2, align = "hv")
+    plot_grid(p1, p2, p3, p4, nrow = 2, ncol = 2, align = "hv")
   }
   
   
