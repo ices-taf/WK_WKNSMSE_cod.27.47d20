@@ -177,7 +177,7 @@ if (exists("HCR_comb")) {
   
 }
 ### try uniform grid search with iteration-specific Ftrgt/Btrgigger combination
-if (exists("grid")) {
+if (exists("grid_search")) {
   if (isTRUE(as.logical(grid))) {
     hcr_vals <- expand.grid(Btrigger = seq(from = 100000, to = 200000, 
                                            length.out = 25),
