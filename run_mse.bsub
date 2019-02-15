@@ -10,16 +10,20 @@
 ## use only 28-core nodes
 #BSUB -R 'span[ptile=28]'
 ## job name for array job
-#BSUB -J WKNSMSE_C[1-35]
+#BSUB -J WKNSMSE_A_alt1[453-456]%6
 ## where to save standard output and error streams
 ###BSUB -oo reports/%J.out
 ###BSUB -eo reports/%J.err
 ## save for array jobs
+##BSUB -oo /gpfs/afmcefas/simonf/reports/%J.%I.out
+##BSUB -eo /gpfs/afmcefas/simonf/reports/%J.%I.err
 #BSUB -oo reports/%J.%I.out
 #BSUB -eo reports/%J.%I.err
 ## send email when job starts and finishes
 #BSUB -B
 #BSUB -N
+### start job after previous job finished
+#BSUB -w "numended(248796,*)"
 
 . /etc/profile
 
@@ -46,6 +50,6 @@ echo "starting the simulations..."
 ### run single job without MPI
 #R CMD BATCH --vanilla --quiet '--args iters=1 years=20 nblocks=1 par_env=2 n_workers=1 HCRoption=1 HCR_comb=6 TAC_constraint=0 BB=0' $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.Rout
 ### run array job
-R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=28 HCRoption=3 HCR_comb=$LSB_JOBINDEX TAC_constraint=0 BB=0" $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.$LSB_JOBINDEX.Rout
+R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=28 HCRoption=1 HCR_comb=$LSB_JOBINDEX TAC_constraint=0 BB=0 OM=1" $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$LSB_JOBID.$LSB_JOBINDEX.Rout
 
 echo "done!"

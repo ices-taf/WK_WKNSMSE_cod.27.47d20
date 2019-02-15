@@ -93,7 +93,11 @@ registerDoRNG(123)
 ### ------------------------------------------------------------------------ ###
 
 ### data path
-path_data <- paste0("input/cod4/", iters, "_", years, "/")
+OM_alt <- "cod4"
+if (exists("OM")) {
+  if (OM > 0) OM_alt <- paste0("cod4_alt", OM)
+}
+path_data <- paste0("input/", OM_alt, "/", iters, "_", years, "/")
 
 ### load input objects
 input <- readRDS(paste0(path_data, "base_run.rds"))
@@ -133,10 +137,12 @@ if (exists("HCRoption")) {
 ### set HCR parameters 
 if (HCRoption %in% 1:6) {
 
+  ### 1-451
   hcr_vals <- expand.grid(
     Ftrgt = seq(from = 0.1, to = 0.5, by = 0.01),
     Btrigger = seq(from = 110000, to = 210000, by = 10000))
   ### additional combinations after finding yield maximum
+  ### 452-456
   comb_max <- switch(HCRoption, 
                      "1" = c(170000, 0.38), 
                      "2" = c(160000, 0.38), 
@@ -145,8 +151,8 @@ if (HCRoption %in% 1:6) {
                      "5" = c(130000, 0.36),
                      "6" = c(140000, 0.36))
   hcr_vals <- rbind(hcr_vals,
-                    expand.grid(Ftrgt = c(comb_max[2]*0.9, comb_max[2]*1.1,
-                                          0.198, 0.46),
+                    expand.grid(Ftrgt = c(comb_max[2], comb_max[2]*0.9, 
+                                          comb_max[2]*1.1, 0.198, 0.46),
                                 Btrigger = comb_max[1]))
   
 }
@@ -288,7 +294,8 @@ res1 <- mp(om = input$om,
 ### save results
 path_out <- paste0("output/runs/cod4/", iters, "_", years)
 dir.create(path = path_out, recursive = TRUE)
-file_out <- paste0("HCR-", input$ctrl.mp$ctrl.hcr@args$option[1],
+file_out <- paste0(OM_alt, "_",
+                   "HCR-", input$ctrl.mp$ctrl.hcr@args$option[1],
                    "_Ftrgt-", input$ctrl.mp$ctrl.phcr@args$Ftrgt[1],
                    "_Btrigger-", input$ctrl.mp$ctrl.phcr@args$Btrigger[1],
                    "_TACconstr-", input$ctrl.mp$ctrl.is@args$TAC_constraint[1],
