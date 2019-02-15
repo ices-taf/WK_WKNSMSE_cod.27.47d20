@@ -372,7 +372,13 @@ SAM_wrapper <- function(stk, idx, tracking,
   }
   
   ### save convergence for all iterations
-  tracking["conv.est", ac(ay)] <- sapply(fit, function(x) x$opt$convergence)
+  tracking["conv.est", ac(ay)] <- sapply(fit, function(x) {
+    if (isTRUE(is(x, "sam"))) {
+      return(x$opt$convergence)
+    } else {
+      return(2)
+    }
+  })
   ### add perceived F and SSB
   ### done in mp()
   #tracking["F.est", ac(ay)] <- fbar(stk0)[, ac(ay - 1)]
