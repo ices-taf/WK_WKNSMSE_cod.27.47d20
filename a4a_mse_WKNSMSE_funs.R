@@ -1437,14 +1437,12 @@ calculate_ddM <- function(stk,
     M2[, "pM2", iter_i] <- exp(M2[, "pM2", iter_i])
     
     ### sum M2s for each prey age class
-    M2age <- as.data.frame(M2[,,iter_i]) %>%
-      group_by(age) %>%
-      summarise(sum(pM2))
+    M2age <- aggregate(M2[,"pM2", iter_i], by = list(age = M2[,"age",iter_i]), sum)
     
     ### overwrite m in the specified year
     ### and add 0.2 for non-predation mortality
     m(stk)[, ac(yr),,,,iter_i] <- 0
-    m(stk)[M2age$age, ac(yr),,,,iter_i] <- M2age$`sum(pM2)`
+    m(stk)[M2age$age, ac(yr),,,,iter_i] <- M2age$x
     m(stk)[, ac(yr),,,,iter_i] <- m(stk)[, ac(yr),,,,iter_i] + 0.2
     
   }
