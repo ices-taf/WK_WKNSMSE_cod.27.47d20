@@ -104,10 +104,19 @@ oem_WKNSMSE <- function(stk,
                         use_catch_residuals = FALSE, ### use residuals for
                         use_idx_residuals = FALSE,   ### observations
                         use_stk_oem = FALSE, ### biological parameters, wts etc
+                        dd_M = NULL,
                         ...) {
   #browser()
   ### current (assessment) year
   ay <- genArgs$ay
+  
+  
+  ### Density-dependent M
+  # Calculate 3-year means of M from the OM on key-run years
+  # to simulate the SAM process
+  if(!is.null(dd_M) & (ay %% 3 == 1)){
+    m(observations$stk)[, ac(ay:(ay+2))] <- yearMeans(m(stk)[, ac((ay-3):(ay-1))])
+  }
   
   ### create object for observed stock
   if (!isTRUE(use_stk_oem)) {

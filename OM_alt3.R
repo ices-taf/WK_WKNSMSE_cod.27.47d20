@@ -548,7 +548,7 @@ mat(stk_oem)[, ac(proj_yrs[-1])] <- yearMeans(mat(stk_oem)[, ac(sample_yrs)])
 # so m(2017:2019) will be the mean of m(2014:2016) from the OM
 # and m(2020:2022) will be the mean of m(2017:2019) from the OM 
 # equivalent to the next key run being in 2020 with last data year 2019.
-m(stk_oem)[, ac(2017:2018)] <- yearMeans(m(stk_oem)[, ac(2014:2016)])
+m(stk_oem)[, ac(2017:2019)] <- yearMeans(m(stk_oem)[, ac(2014:2016)])
 
 ### remove stock assessment results
 stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
@@ -768,7 +768,8 @@ oem <- FLoem(method = oem_WKNSMSE,
                          catch_timing = -1,
                          use_catch_residuals = TRUE, 
                          use_idx_residuals = TRUE,
-                         use_stk_oem = TRUE))
+                         use_stk_oem = TRUE,
+                         dd_M = TRUE))
 ### implementation error model (banking and borrowing)
 # iem <- FLiem(method = iem_WKNSMSE, 
 #              args = list(BB = TRUE))
