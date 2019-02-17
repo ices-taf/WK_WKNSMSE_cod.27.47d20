@@ -922,14 +922,14 @@ fwd_WKNSMSE <- function(stk, ctrl,
                         sr.residuals.mult = TRUE, ### are res multiplicative?
                         maxF = 2, ### maximum allowed Fbar
                         proc_res = NULL, ### process error noise,
-                        dd_M = NULL, ### density-dependent M
+                        dd_M = NULL, relation = NULL, ### density-dependent M
                         ...) {
   
   ### calculate density-dependent natural mortality if required
   if (!is.null(dd_M)) {
     
     ### overwrite m in the target year before projecting forward
-    m(stk)[, ac(ctrl@target[, "year"])] <- calculate_ddM(stk, ctrl@target[, "year"])
+    m(stk)[, ac(ctrl@target[, "year"])] <- calculate_ddM(stk, ctrl@target[, "year"], relation = relation)
     
   }
   
@@ -1426,10 +1426,10 @@ setMethod(f = "iav",
 
 calculate_ddM <- function(stk,
                           yr,
-                          relation = "predation.csv") {
+                          relation) {
   
   ### read in M2 relationships
-  M2 <- read.csv(relation)
+  M2 <- relation
   M2$pM2 <- M2$Nprey <- NA
   M2 <- array(rep(unlist(M2), dim(stk)[6]), dim=c(nrow(M2), ncol(M2), dim(stk)[6]))
   dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
