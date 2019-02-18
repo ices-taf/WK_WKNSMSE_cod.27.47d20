@@ -57,9 +57,6 @@ if (isTRUE(verbose)) {
   plot(fit)
 }
 
-### extract model parameters and use them in the simulation as starting values
-sam_initial <- sam_getpar(fit)
-sam_initial$logScale <- numeric(0)
 
 ### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
@@ -107,6 +104,12 @@ fit2 <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx,
 if (isTRUE(verbose)) summary(fit2) / summary(fit)
 ### estimates and log likelihood identical, only bounds smaller
 
+### fit SAM as it is done during the MSE simulation
+fit_est <- FLR_SAM(stk = cod4_stk2, idx = cod4_idx, 
+                   conf = cod4_conf_sam_no_mult, 
+                   newtonsteps = 0, rel.tol = 0.001)
+### extract model parameters and use them in the simulation as starting values
+sam_initial <- sam_getpar(fit_est)
 ### ------------------------------------------------------------------------ ###
 ### create FLStock ####
 ### ------------------------------------------------------------------------ ###
@@ -144,8 +147,9 @@ stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
 ### add noise to F
 harvest(stk)[] <- uncertainty$harvest
-
-### catch noise added later
+### add noise to catch numbers
+catch.n(stk)[, dimnames(stk)$year[-dims(stk)$year]] <- uncertainty$catch_n
+catch(stk) <- computeCatch(stk)
 
 if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
@@ -559,10 +563,12 @@ catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
 
 ### for historical period, pass on real observed catch
-### -> remove deviation
-catch_res[, dimnames(catch_res)$year <= 2017] <- 1
+### -> calculate residuals
+catch_res[, dimnames(catch_res)$year <= 2017] <- 
+  window(catch.n(stk_orig), end = 2017) / window(catch.n(stk_fwd), end = 2017)
+#plot(catch.n(stk_fwd) * catch_res)
 
-if (isTRUE(verbose)) plot(catch_res)
+if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####

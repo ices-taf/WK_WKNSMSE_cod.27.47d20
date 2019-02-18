@@ -114,7 +114,7 @@ oem_WKNSMSE <- function(stk,
   ### Density-dependent M
   # Calculate 3-year means of M from the OM on key-run years
   # to simulate the SAM process
-  if(!is.null(dd_M) & (ay %% 3 == 1)){
+  if (!is.null(dd_M) & (ay %% 3 == 1)) {
     m(observations$stk)[, ac(ay:(ay+2))] <- yearMeans(m(stk)[, ac((ay-3):(ay-1))])
   }
   
@@ -1434,7 +1434,9 @@ calculate_ddM <- function(stk,
   M2 <- array(rep(unlist(M2), dim(stk)[6]), dim=c(nrow(M2), ncol(M2), dim(stk)[6]))
   dimnames(M2)[[2]] <- c("age","predator","intercept","logbPred","logbPrey","nPred","nPrey","pM2") 
   
-  foreach(iter_i = seq(dim(stk)[6])) %dopar% {
+  M_new <- m(stk)[, ac(yr)] %=% 0
+  
+  for (iter_i in seq(dim(stk)[6])) {
     
     ### extract number of predator and prey cod-at-age from stock.n in the specified year (000s)
     M2[,"nPrey", iter_i] <- stock.n(stk)[M2[,"age",iter_i], ac(yr),,,,iter_i]
@@ -1449,13 +1451,12 @@ calculate_ddM <- function(stk,
     M2age <- aggregate(M2[,"pM2", iter_i], by = list(age = M2[,"age",iter_i]), sum)
     
     ### overwrite m in the specified year
-    ### and add 0.2 for non-predation mortality
-    m(stk)[, ac(yr),,,,iter_i] <- 0
-    m(stk)[M2age$age, ac(yr),,,,iter_i] <- M2age$x
-    m(stk)[, ac(yr),,,,iter_i] <- m(stk)[, ac(yr),,,,iter_i] + 0.2
+    M_new[M2age$age,,,,,iter_i] <- M2age$x
     
   }
+  ### and add 0.2 for non-predation mortality
+  M_new <- M_new + 0.2
   
-  return(m(stk)[, ac(yr)])
+  return(M_new)
   
 }
