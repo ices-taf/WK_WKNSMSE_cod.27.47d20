@@ -224,7 +224,7 @@ harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
 
 ### density-dependent M
 # read in M2 relationships
-M2data <- read.csv("predation.csv")
+M2data <- read.csv("input/predation.csv")
 m(stk_stf)[, ac(2018)] <- calculate_ddM(stk_stf, 2018, relation = M2data)
 
 
