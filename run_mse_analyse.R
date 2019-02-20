@@ -213,7 +213,7 @@ write.csv(x = stats, file = paste0("output/stats.csv"), row.names = FALSE)
 ### plot function
 grid <- function(dat, HCR = "A",
                  time = c("long", "short", "medium"),
-                 add_risk1 = FALSE) {
+                 add_risk1 = FALSE, highlight_max = FALSE) {
   
   ### catch
   dat$catch <- dat[, paste0("catch_median_", time)]
@@ -222,6 +222,11 @@ grid <- function(dat, HCR = "A",
   dat$ssb <- dat[, paste0("ssb_median_", time)]
   dat$risk1 <- dat[, paste0("risk1_", time)]
   dat$Btrigger <- dat$Btrigger / 1000
+  ### find yield maximum
+  dat_max <- dat %>% 
+    filter(risk <= 0.05) %>%
+    filter(catch == max(catch)) %>%
+    select(Ftrgt, Btrigger)
   # p1 <- ggplot(data = dat, 
   #               aes(x = Btrigger, y = Ftrgt, fill = catch)) +
   #   geom_raster() +
@@ -252,8 +257,8 @@ grid <- function(dat, HCR = "A",
          y = expression(F[trgt]))
   ### risk
   p2 <- ggplot(data = dat, 
-                aes(x = Btrigger, y = Ftrgt, fill = risk)) +
-    geom_raster(alpha = 0.75) +
+                aes(x = Btrigger, y = Ftrgt)) +
+    geom_raster(aes(fill = risk), alpha = 0.75) +
     scale_fill_gradient(paste0(time, "-term\nrisk 3"), 
                         low = "green", high = "red") +
     geom_text(aes(label = round(risk, 3), colour = risk <= 0.05),
@@ -267,8 +272,8 @@ grid <- function(dat, HCR = "A",
          y = expression(F[trgt]))
   ### iav
   p3 <- ggplot(data = dat, 
-                aes(x = Btrigger, y = Ftrgt, fill = iav)) +
-    geom_raster() +
+                aes(x = Btrigger, y = Ftrgt)) +
+    geom_raster(aes(fill = iav)) +
     geom_text(aes(label = round(iav, 3), colour = risk <= 0.05),
               size = 2) +
     scale_colour_manual("risk <= 0.05",
@@ -284,8 +289,8 @@ grid <- function(dat, HCR = "A",
          y = expression(F[trgt]))
   ### SSB
   p4 <- ggplot(data = dat, 
-               aes(x = Btrigger, y = Ftrgt, fill = ssb)) +
-    geom_raster(alpha = 0.5) +
+               aes(x = Btrigger, y = Ftrgt)) +
+    geom_raster(aes(fill = ssb), alpha = 0.5) +
     geom_text(aes(label = round(ssb), colour = risk <= 0.05),
               size = 2) +
     scale_colour_manual("risk <= 0.05",
@@ -301,8 +306,8 @@ grid <- function(dat, HCR = "A",
          y = expression(F[trgt]))
   ### risk1
   p5 <- ggplot(data = dat, 
-               aes(x = Btrigger, y = Ftrgt, fill = risk1)) +
-    geom_raster(alpha = 0.75) +
+               aes(x = Btrigger, y = Ftrgt)) +
+    geom_raster(aes(fill = risk1), alpha = 0.75) +
     scale_fill_gradient(paste0(time, "-term\nrisk 1"), 
                         low = "green", high = "red") +
     geom_text(aes(label = round(risk1, 3), colour = risk1 <= 0.05),
@@ -314,6 +319,17 @@ grid <- function(dat, HCR = "A",
     scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
+  ### highlight maximum
+  if (isTRUE(highlight_max)) {
+    p_add <- geom_tile(data = dat_max, aes(x = Btrigger, y = Ftrgt),
+                width = 10, height = 0.01, linetype = "solid",
+                alpha = 0, colour = "black", size = 0.3)
+    p1 <- p1 + p_add
+    p2 <- p2 + p_add
+    p3 <- p3 + p_add
+    p4 <- p4 + p_add
+    p5 <- p5 + p_add
+  }
   
   if (isTRUE(add_risk1)) {
     plot_grid(p1, p2, p3, p5, nrow = 2, ncol = 2, align = "hv")
@@ -328,7 +344,7 @@ grid <- function(dat, HCR = "A",
 grid(dat = stats %>%
        filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "long", add_risk1 = FALSE)
+     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_A_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -348,7 +364,7 @@ ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_A_short.png",
 grid(dat = stats %>%
        filter(HCR == "B" & BB == FALSE & TACconstr == FALSE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "long", add_risk1 = FALSE)
+     HCR = "B", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_B_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -368,7 +384,7 @@ ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_B_short.png",
 grid(dat = stats %>%
        filter(HCR == "C" & BB == FALSE & TACconstr == FALSE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "long", add_risk1 = FALSE)
+     HCR = "C", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_C_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -388,7 +404,7 @@ ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_C_short.png",
 grid(dat = stats %>%
        filter(HCR == "A" & BB == TRUE & TACconstr == TRUE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "long", add_risk1 = FALSE)
+     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_AD_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -409,7 +425,7 @@ ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_AD_short.png",
 grid(dat = stats %>%
        filter(HCR == "B" & BB == TRUE & TACconstr == TRUE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "long", add_risk1 = FALSE)
+     HCR = "B", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_BE_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -430,7 +446,7 @@ ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_BE_short.png",
 grid(dat = stats %>%
        filter(HCR == "C" & BB == TRUE & TACconstr == TRUE &
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "long", add_risk1 = FALSE)
+     HCR = "C", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_CE_long.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 grid(dat = stats %>%
@@ -766,91 +782,126 @@ ggplot(data = combs_base,
   theme_bw() +
   ylim(0, NA)
 
-
+### get median for option A*
+combs_base <- left_join(combs_base, 
+                         combs_base %>%
+  group_by(key, OM, name) %>%
+  summarise(value_median = median(value)) %>%
+  filter(name == "A*") %>%
+    select(-name))
 p_catch_long <- ggplot(data = combs_base[combs_base$key == "catch_long", ], 
                        mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   labs(x = "", y = "long-term catch [t]") +
   scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
 p_catch_medium <- ggplot(data = combs_base[combs_base$key == "catch_medium", ], 
                        mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   labs(x = "", y = "medium-term catch [t]") +
   scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
 p_catch_short <- ggplot(data = combs_base[combs_base$key == "catch_short", ], 
                          mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   labs(x = "", y = "short-term catch [t]") +
   scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
 p_risk1_long <- ggplot(data = combs_base[combs_base$key == "risk1_long", ], 
                        mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_bar(stat = "identity", position = "dodge", colour = "black") +
+  geom_blank(data = combs_base[combs_base$key == "risk3_long", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term risk 1")
 p_risk1_medium <- ggplot(data = combs_base[combs_base$key == "risk1_medium", ], 
                          mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_blank(data = combs_base[combs_base$key == "risk3_medium", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term risk 1")
 p_risk1_short <- ggplot(data = combs_base[combs_base$key == "risk1_short", ], 
                         mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_blank(data = combs_base[combs_base$key == "risk3_short", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term risk 1")
 p_risk3_long <- ggplot(data = combs_base[combs_base$key == "risk3_long", ], 
                        mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_blank(data = combs_base[combs_base$key == "risk1_long", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term risk 3")
 p_risk3_medium <- ggplot(data = combs_base[combs_base$key == "risk3_medium", ], 
                          mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_blank(data = combs_base[combs_base$key == "risk1_medium", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term risk 3")
 p_risk3_short <- ggplot(data = combs_base[combs_base$key == "risk3_short", ], 
                         mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_blank(data = combs_base[combs_base$key == "risk1_short", ]) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term risk 3")
 p_iav_long <- ggplot(data = combs_base[combs_base$key == "iav_long", ], 
                        mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 1)) + 
   labs(x = "", y = "long-term inter-annual catch variability")
 p_iav_medium <- ggplot(data = combs_base[combs_base$key == "iav_medium", ], 
                          mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 1)) + 
   labs(x = "", y = "medium-term inter-annual catch variability")
 p_iav_short <- ggplot(data = combs_base[combs_base$key == "iav_short", ], 
                         mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 1.2)) + 
   labs(x = "", y = "short-term inter-annual catch variability")
 p_ssb_long <- ggplot(data = combs_base[combs_base$key == "ssb_long", ], 
                      mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 1.2e+06)) +
   labs(x = "", y = "long-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2))
 p_ssb_medium <- ggplot(data = combs_base[combs_base$key == "ssb_medium", ], 
                        mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 0.9e+06)) +
   labs(x = "", y = "medium-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
                      limits = c(0, NA))
 p_ssb_short <- ggplot(data = combs_base[combs_base$key == "ssb_short", ], 
                       mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
+  coord_cartesian(ylim = c(0, 0.65e+06)) +
   labs(x = "", y = "short-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
                      limits = c(0, NA))
 p_recovery_proportion <- 
   ggplot(data = combs_base[combs_base$key == "recovery_proportion", ], 
          mapping = aes(x = name, y = value)) +
   geom_bar(stat = "identity", position = "dodge", colour = "black") + 
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "recovery proportion")
 p_recovery_time <- 
   ggplot(data = combs_base[combs_base$key == "recovery_time", ], 
          mapping = aes(x = name, y = value)) +
   geom_boxplot() + theme_bw() + ylim(0, NA) +
+  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
   labs(x = "", y = "recovery time [years]")
 
 plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long, p_ssb_long,
@@ -933,6 +984,7 @@ p_risk1_long <- ggplot(data = combs_dat[combs_dat$key == "risk1_long", ],
                                      colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_long", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term risk 1")
 p_risk1_medium <- ggplot(data = combs_dat[combs_dat$key == "risk1_medium", ], 
@@ -940,6 +992,7 @@ p_risk1_medium <- ggplot(data = combs_dat[combs_dat$key == "risk1_medium", ],
                                        colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_medium", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term risk 1")
 p_risk1_short <- ggplot(data = combs_dat[combs_dat$key == "risk1_short", ], 
@@ -947,6 +1000,7 @@ p_risk1_short <- ggplot(data = combs_dat[combs_dat$key == "risk1_short", ],
                                       colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_short", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term risk 1")
 p_risk3_long <- ggplot(data = combs_dat[combs_dat$key == "risk3_long", ], 
@@ -954,6 +1008,7 @@ p_risk3_long <- ggplot(data = combs_dat[combs_dat$key == "risk3_long", ],
                                      colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_long", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term risk 3")
 p_risk3_medium <- ggplot(data = combs_dat[combs_dat$key == "risk3_medium", ], 
@@ -961,6 +1016,7 @@ p_risk3_medium <- ggplot(data = combs_dat[combs_dat$key == "risk3_medium", ],
                                        colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_medium", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term risk 3")
 p_risk3_short <- ggplot(data = combs_dat[combs_dat$key == "risk3_short", ], 
@@ -968,30 +1024,35 @@ p_risk3_short <- ggplot(data = combs_dat[combs_dat$key == "risk3_short", ],
                                       colour = scenario)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_short", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term risk 3")
 p_iav_long <- ggplot(data = combs_dat[combs_dat$key == "iav_long", ], 
                      mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1.3)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term inter-annual catch variability")
 p_iav_medium <- ggplot(data = combs_dat[combs_dat$key == "iav_medium", ], 
                        mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1.3)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term inter-annual catch variability")
 p_iav_short <- ggplot(data = combs_dat[combs_dat$key == "iav_short", ], 
                       mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1.5)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term inter-annual catch variability")
 p_ssb_long <- ggplot(data = combs_dat[combs_dat$key == "ssb_long", ], 
                      mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 5e+5)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term SSB [t]") +
   theme(legend.direction = "horizontal")
@@ -999,6 +1060,7 @@ p_ssb_medium <- ggplot(data = combs_dat[combs_dat$key == "ssb_medium", ],
                        mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) + 
+  coord_cartesian(ylim = c(0, 5e+5)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term SSB [t]") +
   theme(legend.direction = "horizontal")
@@ -1006,6 +1068,7 @@ p_ssb_short <- ggplot(data = combs_dat[combs_dat$key == "ssb_short", ],
                       mapping = aes(x = name, y = value, colour = scenario)) +
   geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 4.5e+5)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term SSB [t]") +
   theme(legend.direction = "horizontal") +
@@ -1089,38 +1152,52 @@ p_catch_long <- ggplot(data = combs_alt[combs_alt$key == "catch_long", ],
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term catch [t]")
+  labs(x = "", y = "long-term catch [t]") +
+  coord_cartesian(ylim = c(0, 2e+05)) +
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
+                     limits = c(0, NA))
 p_catch_medium <- ggplot(data = combs_alt[combs_alt$key == "catch_medium", ], 
                          mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) + 
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term catch [t]")
+  labs(x = "", y = "medium-term catch [t]") +
+  coord_cartesian(ylim = c(0, 2e+05)) +
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
+                     limits = c(0, NA))
 p_catch_short <- ggplot(data = combs_alt[combs_alt$key == "catch_short", ], 
                         mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) + 
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term catch [t]")
+  labs(x = "", y = "short-term catch [t]") +
+  coord_cartesian(ylim = c(0, 2.1e+05)) +
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
+                     limits = c(0, NA))
 p_risk1_long <- ggplot(data = combs_alt[combs_alt$key == "risk1_long", ], 
                        mapping = aes(x = name, y = value, fill = OM, 
                                      colour = OM)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_alt[combs_alt$key == "risk3_long", ]) +
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 1")
+  labs(x = "", y = "long-term risk 1") +
+  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
 p_risk1_medium <- ggplot(data = combs_alt[combs_alt$key == "risk1_medium", ], 
                          mapping = aes(x = name, y = value, fill = OM,
                                        colour = OM)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_alt[combs_alt$key == "risk3_medium", ]) +
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 1")
+  labs(x = "", y = "medium-term risk 1") +
+  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
 p_risk1_short <- ggplot(data = combs_alt[combs_alt$key == "risk1_short", ], 
                         mapping = aes(x = name, y = value, fill = OM,
                                       colour = OM)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_alt[combs_alt$key == "risk3_short", ]) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term risk 1")
 p_risk3_long <- ggplot(data = combs_alt[combs_alt$key == "risk3_long", ], 
@@ -1129,14 +1206,16 @@ p_risk3_long <- ggplot(data = combs_alt[combs_alt$key == "risk3_long", ],
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 3")
+  labs(x = "", y = "long-term risk 3") +
+  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
 p_risk3_medium <- ggplot(data = combs_alt[combs_alt$key == "risk3_medium", ], 
                          mapping = aes(x = name, y = value, fill = OM,
                                        colour = OM)) +
   geom_bar(show.legend = FALSE, stat = "identity", 
            position = position_dodge2(preserve = "single")) + 
   theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 3")
+  labs(x = "", y = "medium-term risk 3") +
+  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
 p_risk3_short <- ggplot(data = combs_alt[combs_alt$key == "risk3_short", ], 
                         mapping = aes(x = name, y = value, fill = OM,
                                       colour = OM)) +
@@ -1148,18 +1227,21 @@ p_iav_long <- ggplot(data = combs_alt[combs_alt$key == "iav_long", ],
                      mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term inter-annual catch variability")
 p_iav_medium <- ggplot(data = combs_alt[combs_alt$key == "iav_medium", ], 
                        mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term inter-annual catch variability")
 p_iav_short <- ggplot(data = combs_alt[combs_alt$key == "iav_short", ], 
                       mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1.5)) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "short-term inter-annual catch variability")
 p_ssb_long <- ggplot(data = combs_alt[combs_alt$key == "ssb_long", ], 
@@ -1168,14 +1250,16 @@ p_ssb_long <- ggplot(data = combs_alt[combs_alt$key == "ssb_long", ],
                position = position_dodge2(preserve = "single")) +
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "long-term SSB [t]") +
-  theme(legend.direction = "horizontal")
+  theme(legend.direction = "horizontal") +
+  coord_cartesian(ylim = c(0, 2.3e+06))
 p_ssb_medium <- ggplot(data = combs_alt[combs_alt$key == "ssb_medium", ], 
                        mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
                position = position_dodge2(preserve = "single")) + 
   theme_bw() + ylim(0, NA) +
   labs(x = "", y = "medium-term SSB [t]") +
-  theme(legend.direction = "horizontal")
+  theme(legend.direction = "horizontal") +
+  coord_cartesian(ylim = c(0, 1.8e+06))
 p_ssb_short <- ggplot(data = combs_alt[combs_alt$key == "ssb_short", ], 
                       mapping = aes(x = name, y = value, colour = OM)) +
   geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
@@ -1184,7 +1268,8 @@ p_ssb_short <- ggplot(data = combs_alt[combs_alt$key == "ssb_short", ],
   labs(x = "", y = "short-term SSB [t]") +
   theme(legend.direction = "horizontal") +
   scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
-                     limits = c(0, NA))
+                     limits = c(0, NA)) +
+  coord_cartesian(ylim = c(0, 8e+05))
 p_recovery_proportion <- 
   ggplot(data = combs_alt[combs_alt$key == "recovery_proportion", ], 
          mapping = aes(x = name, y = value, fill = OM, colour = OM)) +
