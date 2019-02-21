@@ -281,7 +281,9 @@ SAM_wrapper <- function(stk, idx, tracking,
     
     ### check how to do forecast
     ### currently, can only do F status quo
-    if (fwd_trgt != "fsq") stop("only fsq supported in forecast")
+    if (!all(fwd_trgt %in% c("fsq","TAC"))) {
+      stop("only fsq and TAC supported in forecast")
+    }
     
     ### years for average values
     ave.years <- range(stk0)[["maxyear"]] + fwd_yrs_average
@@ -307,8 +309,26 @@ SAM_wrapper <- function(stk, idx, tracking,
       class(fit) <- "sam_list"
     }
     
+    ### template for forecast targets
+    fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
+    catchval <- ifelse(fwd_trgt == "TAC", -1, NA)
+    ### recycle target if neccessary
+    if (fwd_yrs > length(fwd_trgt)) {
+      fscale <- c(fscale, tail(fscale, 1))
+      catchval <- c(catchval, tail(catchval, 1))
+    }
+    ### get recent TAC
+    if (genArgs$iy == ay) {
+      ### in first year of simulation, use value from OM saved earlier in ay
+      TAC_last <- tracking["metric.is", ac(ay)]
+    } else {
+      ### in following years, use TAC advised the year before
+      TAC_last <- tracking["metric.is", ac(ay - 1)]
+    }
+    
     ### do forecast for all iterations
-    fc <- foreach(fit_i = fit, .errorhandling = "pass") %do% {
+    fc <- foreach(fit_i = fit, iter_i = seq_along(fit),
+                  .errorhandling = "pass") %do% {
       
       ### overwrite landing fraction with last year, if requested
       if (!is.null(fwd_yrs_lf_remove)) {
@@ -318,8 +338,15 @@ SAM_wrapper <- function(stk, idx, tracking,
         fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
       }
       
+      ### define forecast targets for current iteration
+      fscale_i <- fscale
+      ### load TAC as catch target
+      catchval_i <- ifelse(catchval == -1, c(TAC_last[,,,,, iter_i]), catchval)
+      
       ### run forecast
-      fc_i <- stockassessment::forecast(fit = fit_i, fscale = rep(1, fwd_yrs),
+      fc_i <- stockassessment::forecast(fit = fit_i, 
+                                        fscale = fscale_i, 
+                                        catchval = catchval_i,
                                         ave.years = ave.years,
                                         rec.years = rec.years,
                                         overwriteSelYears = overwriteSelYears,
@@ -367,16 +394,11 @@ SAM_wrapper <- function(stk, idx, tracking,
     m.spwn(stk0)[, ac(yrs_fill)] <- yearMeans(m.spwn(stk0)[, ac(ave.years)])
     harvest(stk0)[, ac(yrs_fill)] <- yearMeans(harvest(stk0)[, ac(ave.years)])
     
-    #ssb(stk0)
-    
     ### PLEASE NOTE:
     ### SSB value slightly different from SSB value generated from SAM:
     ### SAM calculates SSB per simulation and gives median
     ### here: calculate median of numbers at age and calculate SSB from
     ###       median numbers
-    
-    ### ISSUES: forecast fails if SAM did not converge, creates error and stops
-    ### 
     
   }
   
@@ -576,6 +598,15 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     
   }
   
+  ### get recent TAC
+  if (genArgs$iy == ay) {
+    ### in first year of simulation, use value from OM saved earlier in ay
+    TAC_last <- tracking["metric.is", ac(ay)]
+  } else {
+    ### in following years, use TAC advised the year before
+    TAC_last <- tracking["metric.is", ac(ay - 1)]
+  }
+  
   ### go through all model fits
   fc <- foreach(fit_i = fit, iter_i = seq_along(fit), 
                 .errorhandling = "pass") %do% {
@@ -589,10 +620,13 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     }
     
     ### check how to do forecast
-    ### currently, can only do F status quo and F target from ctrl object
-    fscale <- ifelse(fwd_trgt == "fsq", 1, NA) ### scaled Fsq
+    ### can handle F status quo, F target from ctrl object and TAC
+    ### scaled F
+    fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
     ### target F values
-    fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA) 
+    fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA)
+    ### target catch values
+    catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
     
     ### years for average values
     ave.years <- max(fit_i$data$years) + fwd_yrs_average
@@ -607,14 +641,17 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
     
     ### forecast 
-    fc_i <- stockassessment::forecast(fit = fit_i, fscale = fscale, fval = fval,
+    fc_i <- stockassessment::forecast(fit = fit_i, 
+                                      fscale = fscale, 
+                                      fval = fval, 
+                                      catchval = catchval,
                                       ave.years = ave.years,
                                       rec.years = rec.years,
                                       overwriteSelYears = overwriteSelYears,
                                       splitLD = fwd_splitLD)
     
     ### return forecast table
-    return(attr(fc_i, "tab"))#[ac(ay + 1), "catch:median"])
+    return(attr(fc_i, "tab"))
     
   }
   ### if forecast fails, error message returned
@@ -759,11 +796,15 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
               fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
             }
             
-            ### create vector with targets
-            ### target Fsq in intermediate year, and year after TAC year
-            fscale <- c(1, NA, 1)
-            ### target TAC in TAC year
-            cval <- c(NA, catch_target[iter_i], NA)
+            ### check how to do forecast
+            ### target recently advised TAC
+            catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
+            ### scaled F
+            fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
+            ### target new TAC after implementation of TAC constraint TAC year
+            catchval[which(fwd_trgt == "hcr")[1]] <- catch_target[iter_i]
+            ### target fsq (F that corresponds to TAC) in following years
+            fscale[which(fwd_trgt == "hcr")[-1]] <- 1
             
             ### years for average values
             ave.years <- max(fit_i$data$years) + fwd_yrs_average
@@ -780,7 +821,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
             ### forecast 
             fc_i <- stockassessment::forecast(fit = fit_i, 
                                               fscale = fscale, 
-                                              catchval = cval,
+                                              catchval = catchval,
                                               ave.years = ave.years,
                                               rec.years = rec.years,
                                           overwriteSelYears = overwriteSelYears,
