@@ -59,6 +59,11 @@ files_res$BB <-  as.logical(
 
 stats <- readRDS(paste0(path_res, "stats.rds"))
 stats_new <- merge(stats, files_res, all = TRUE)
+### set Blim depending on OM
+stats$Blim <- sapply(stats$OM, function(x) {
+  switch(x, "cod4" = 107000,"cod4_alt1" = 107000, "cod4_alt2" = 108000,
+         "cod4_alt3" = 107000)})
+### keep only new files
 stats_new <- stats_new[!stats_new$file %in% stats$file, ]
 
 res_list <- foreach(i = seq(nrow(stats_new))) %dopar% {
@@ -103,33 +108,47 @@ stats_new$catch_median_medium <- foreach(x = res_list, .packages = "FLCore",
   median(window(catch(x@stock), start = 2024, end = 2028))
 }
 ### risks
-stats_new$risk1_full <- foreach(x = res_list, .packages = "FLCore",
+stats_new$risk1_full <- foreach(x = res_list, 
+                                Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                .packages = "FLCore",
                                 .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2019) < 107000)
+  mean(window(ssb(x@stock), start = 2019) < Blim)
 }
-stats_new$risk1_long <- foreach(x = res_list, .packages = "FLCore",
+stats_new$risk1_long <- foreach(x = res_list, 
+                                Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                .packages = "FLCore",
                                 .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2029) < 107000)
+  mean(window(ssb(x@stock), start = 2029) < Blim)
 }
-stats_new$risk1_short <- foreach(x = res_list, .packages = "FLCore",
+stats_new$risk1_short <- foreach(x = res_list, 
+                                 Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                 .packages = "FLCore",
+                                 .combine = "c") %dopar% {
+  mean(window(ssb(x@stock), start = 2019, end = 2023) < Blim)
+}
+stats_new$risk1_medium <- foreach(x = res_list, 
+                                  Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                  .packages = "FLCore",
                                   .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2019, end = 2023) < 107000)
+  mean(window(ssb(x@stock), start = 2024, end = 2028) < Blim)
 }
-stats_new$risk1_medium <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2024, end = 2028) < 107000)
-}
-stats_new$risk3_long <- foreach(x = res_list, .packages = "FLCore",
+stats_new$risk3_long <- foreach(x = res_list, 
+                                Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                .packages = "FLCore",
                                 .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2029) < 107000))
+  max(iterMeans(window(ssb(x@stock), start = 2029) < Blim))
 }
-stats_new$risk3_short <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2019, end = 2023) < 107000))
+stats_new$risk3_short <- foreach(x = res_list, 
+                                 Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                 .packages = "FLCore",
+                                 .combine = "c") %dopar% {
+  max(iterMeans(window(ssb(x@stock), start = 2019, end = 2023) < Blim))
 }
-stats_new$risk3_medium <- foreach(x = res_list, .packages = "FLCore",
+stats_new$risk3_medium <- foreach(x = res_list, 
+                                  Blim = stats_new$Blim[seq(nrow(stats_new))],
+                                  .packages = "FLCore",
                                   .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2024, end = 2028) < 107000))
+  max(iterMeans(window(ssb(x@stock), start = 2024, end = 2028) < Blim))
 }
 ### inter-annual variation of catch
 stats_new$iav_long <- foreach(x = res_list, .packages = "FLCore",
@@ -202,6 +221,7 @@ stats_new$F_maxed <- foreach(x = res_list, .packages = "FLCore",
 ### OM_alt2 HCR A, Btrigger = 190000, Ftrgt = 0.4, iteration 756
 
 stats <- rbind(stats, stats_new)
+stats <- stats[order(stats$file), ]
 saveRDS(object = stats, file = paste0(path_res, "stats.rds"))
 write.csv(x = stats, file = paste0("output/stats.csv"), row.names = FALSE)
 
