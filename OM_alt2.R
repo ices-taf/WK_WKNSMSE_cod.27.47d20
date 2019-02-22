@@ -67,6 +67,7 @@ if (isTRUE(verbose)) {
 
 ### re-estimate Blim (to be used when calculating performance stats)
 blim <- signif(ssbtable(fit)["1996",][[1]], digits = 3)
+### 108000
 
 ### ------------------------------------------------------------------------ ###
 ### remove catch multiplier for cod ####
