@@ -1488,3 +1488,64 @@ ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/",
                          "MP_vs_OM.png"), 
        width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
 
+
+### ------------------------------------------------------------------------ ###
+### OM_alt4: very low recruitment & stock below Blim ####
+### ------------------------------------------------------------------------ ###
+
+A <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds")
+plot(A@stock)
+B <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-B_Ftrgt-0.38_Btrigger-160000_TACconstr-FALSE_BB-FALSE.rds")
+plot(B@stock)
+C <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-C_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds")
+AD <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-A_Ftrgt-0.4_Btrigger-190000_TACconstr-TRUE_BB-TRUE.rds")
+BE <- AD <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-B_Ftrgt-0.36_Btrigger-130000_TACconstr-TRUE_BB-TRUE.rds")
+CE <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-C_Ftrgt-0.36_Btrigger-140000_TACconstr-TRUE_BB-TRUE.rds")
+OM_alt4 <- FLStocks(A = A@stock, B = B@stock, C = C@stock,
+                    AD = AD@stock, BE = BE@stock, CE = CE@stock)
+plot(OM_alt4[1:3])
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "OM_alt4_ABC_stock.png"), 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+
+### find minimum SSB
+sapply(OM_alt4, function(x) which.min(iterMedians(ssb(x))))
+dimnames(ssb(OM_alt4$A))$year[which.min(iterMedians(ssb(OM_alt4$A)))]
+### 2034
+df_4 <- as.data.frame(FLQuants(lapply(window(OM_alt4[1:3], 
+                                             start = 2034, end = 2034),
+                                      ssb)))
+
+ggplot(data = df_4,
+       aes(x = qname, y = data, group = qname, colour = qname)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(y = "SSB [t]", x = "HCR option") +
+  scale_color_discrete("")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "OM_alt4_ABC_lowest_SSB.png"), 
+       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
+### recovery time
+ssb_4 <- lapply(window(OM_alt4[1:3], start = 2034),
+                                       ssb)
+ssb_4 <- lapply(ssb_4, function(xi) {
+  FLQuant(xi >= 107000)
+})
+ssb_4 <- foreach(i = seq_along(ssb_4), .combine = "rbind") %do% {
+  data.frame(
+    data = apply(ssb_4[[i]]@.Data, 6, function(x) {
+      c(if (any(as.logical(x))) {which(as.logical(x))[1]} else {Inf})
+    }),
+    HCR = names(ssb_4)[i])
+}
+ggplot(data = ssb_4,
+       aes(x = HCR, y = data, colour = HCR)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(y = "recovery time to Blim [years]")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "OM_alt4_ABC_recovery.png"), 
+       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+
