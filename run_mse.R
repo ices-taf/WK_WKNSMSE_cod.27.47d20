@@ -228,6 +228,12 @@ if (isTRUE(input$ctrl.mp$ctrl.is@args$TAC_constraint)) {
     cat(paste0("\nTAC constraint NOT implemented.\n\n"))
     
 }
+### manual overwrite/removal of BB if requested
+if (exists("TAC_constraint")) {
+  if (isTRUE(TAC_constraint == -1)) {
+    input$ctrl.mp$ctrl.is@args$TAC_constraint <- FALSE
+  }
+}
 
 ### ------------------------------------------------------------------------ ###
 ### banking & borrowing
@@ -248,6 +254,7 @@ if (exists("BB")) {
   }
 
 }
+
 if (HCRoption %in% 4:6) {
     
   input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
@@ -267,6 +274,17 @@ if (HCRoption %in% 4:6) {
   }
   
 }
+### manual overwrite/removal of BB
+if (exists("BB")) {
+  if (isTRUE(BB == -1)) {
+    
+    input$iem <- NULL
+    input$ctrl.mp$ctrl.is@args$BB <- FALSE
+    
+  }
+  
+}
+
 
 if (!is.null(input$iem)) {
     
