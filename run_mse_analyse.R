@@ -1439,3 +1439,52 @@ ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/",
        width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
+### ------------------------------------------------------------------------ ###
+### compare OM SSB/F with MP SSB/F ####
+### ------------------------------------------------------------------------ ###
+
+df <- foreach(OM = c("cod4", "cod4_alt1", "cod4_alt2", "cod4_alt3"),
+              .combine = rbind) %do% {
+  res <- readRDS(paste0("output/runs/cod4/1000_20/", OM, "_HCR-A_Ftrgt-0.38",
+                        "_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds"))
+  res_input <- readRDS(paste0("input/", OM, "/1000_20/base_run.rds"))$om@stock
+  tmp <- FLQuant(NA, dimnames = list(
+    metric = c("F.om", "SSB.om", "F.est", "SSB.est", "F", "SSB"), 
+    year = dimnames(res_input)$year,
+    iter = dimnames(res_input)$iter))
+  tmp["F.est", ac(an(dimnames(res@tracking)$year) - 1)] <- 
+    res@tracking["F.est"]
+  tmp["SSB.est", ac(an(dimnames(res@tracking)$year) - 1)] <- 
+    res@tracking["B.est"]
+  tmp["SSB.om", dimnames(res_input)$year] <- ssb(res_input)
+  tmp["F.om", dimnames(res_input)$year] <- fbar(res_input)
+  tmp["SSB.om", dimnames(res@stock)$year] <- ssb(res@stock)
+  tmp["F.om", dimnames(res@stock)$year] <- fbar(res@stock)
+  tmp["SSB"] <- tmp["SSB.est"] / tmp["SSB.om"]
+  tmp["F"] <- tmp["F.est"] / tmp["F.om"]
+  tmp_out <- cbind(as.data.frame(tmp), OM = OM)
+  tmp_out <- tmp_out[!is.na(tmp_out$data) & is.finite(tmp_out$data), ]
+  tmp_out
+  
+}
+df <- df %>% group_by(metric, year, OM) %>%
+  summarise(X0.05 = quantile(data, probs = 0.05),
+            X0.25 = quantile(data, probs = 0.25),
+            X0.50 = quantile(data, probs = 0.50),
+            X0.75 = quantile(data, probs = 0.75),
+            X0.95 = quantile(data, probs = 0.95))
+ggplot(data = df %>% filter(metric %in% c("F", "SSB")),
+       aes(x = year, y = X0.50)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3, fill = "#F8766D",
+              show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, fill = "#F8766D",
+              show.legend = FALSE) +
+  geom_line(show.legend = FALSE) +
+  facet_grid(OM ~ metric) +
+  theme_bw() +
+  geom_hline(yintercept = 1, alpha = 0.5) +
+  labs(y = "MP value / OM value")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "MP_vs_OM.png"), 
+       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
+
