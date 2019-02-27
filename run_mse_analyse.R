@@ -1335,3 +1335,107 @@ ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/",
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
+### ------------------------------------------------------------------------ ###
+### compare base OM with OM_alt3 (density dependent M) ####
+### ------------------------------------------------------------------------ ###
+
+OM_0_3_stats <- stats %>% 
+  filter(OM %in% c("cod4", "cod4_alt3") &
+           HCR == "A" & Btrigger == 170000 & Ftrgt == 0.38 &
+           BB == FALSE)
+OMs <- list(
+  base = readRDS(paste0("output/runs/cod4/1000_20/",
+                        "cod4_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE",
+                        "_BB-FALSE.rds"))@stock,
+  ddM = readRDS(paste0("output/runs/cod4/1000_20/",
+                        "cod4_alt3_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr",
+                        "-FALSE_BB-FALSE.rds"))@stock)
+input_OM <- list(
+  base = readRDS("input/cod4/1000_20/base_run.rds")$om@stock,
+  ddM = readRDS("input/cod4/1000_20/base_run.rds")$om@stock
+)
+OMs_df <- lapply(seq(input_OM), function(x) {
+  M <- m(input_OM[[x]])
+  M[, dimnames(m(OMs[[x]]))$year] <- m(OMs[[x]])
+  SSB <- ssb(input_OM[[x]])
+  SSB[, dimnames(m(OMs[[x]]))$year] <- ssb(OMs[[x]])
+  qnts <- FLQuants("M at age 1" = M[1,], "M at age 2" = M[2,], 
+                   "M at age 3" = M[3,], "M at age 4" = M[4,], 
+                   "M at age 5" = M[5,], "M at age 6" = M[6,],
+                   "SSB" = SSB)
+  cbind(as.data.frame(qnts), OM = names(OMs)[x])
+})
+OMs_df <- do.call(rbind, OMs_df)
+OMs_df <- OMs_df %>% group_by(age, year, qname, OM) %>%
+  summarise(X0.05 = quantile(data, probs = 0.05),
+            X0.25 = quantile(data, probs = 0.25),
+            X0.50 = quantile(data, probs = 0.50),
+            X0.75 = quantile(data, probs = 0.75),
+            X0.95 = quantile(data, probs = 0.95))
+p1 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 1),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank())
+p2 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 2),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        strip.text.x = element_blank())
+p3 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 3),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        strip.text.x = element_blank())
+p4 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 4),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
+p5 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 5),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
+p6 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 6),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
+p7 <- ggplot(data = OMs_df %>% filter(year >= 2000 & qname == "SSB"),
+             aes(x = year, y = X0.50, fill = OM)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
+  geom_line(aes(colour = OM), show.legend = FALSE) +
+  facet_grid(qname ~ OM, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title.y = element_blank(), strip.text.x = element_blank())
+plot_grid(p1, p2, p3, p4, p5, p6, p7, ncol = 1, align = "vh")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "baseOM_vs_ddM.png"), 
+       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+
