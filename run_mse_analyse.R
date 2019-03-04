@@ -1556,3 +1556,189 @@ ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/",
        width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
+### ------------------------------------------------------------------------ ###
+### base OM optimised options + TAC constraint, no BB ####
+### ------------------------------------------------------------------------ ###
+
+### select maximum yield combinations
+combs <- data.frame(name = rep(c("A", "B", "C", "AD", "BE", "CE"), each = 2),
+                    HCR = rep(c("A", "B", "C", "A", "B", "C"), each = 2),
+                    BB = c(rep(FALSE, 6), rep(c(TRUE, FALSE), 3)),
+                    TACconstr = c(rep(c(FALSE, TRUE), 3), 
+                                  rep(c(TRUE, TRUE), 3)),
+                    Btrigger = rep(c(170000, 160000, 170000, 190000, 130000,
+                                     140000), each = 2),
+                    Ftrgt = rep(c(0.38, 0.38, 0.38,
+                              0.40, 0.36, 0.36), each = 2),
+                    scenario = c("default", "TAC constraint"),
+                    OM = "cod4")
+combs <- merge(combs, stats)
+combs_dat <- stats_full(data = combs)
+combs_dat$scenario <- factor(combs_dat$scenario, 
+                             levels = c("default", "TAC constraint"))
+ggplot(data = combs_dat, 
+       mapping = aes(x = name, y = value, group = interaction(scenario, name), 
+                     colour = scenario)) +
+  geom_boxplot() + 
+  facet_wrap(~ key, scales = "free_y") +
+  theme_bw() +
+  ylim(0, NA)
+
+p_catch_long <- ggplot(data = combs_dat[combs_dat$key == "catch_long", ], 
+                       mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "long-term catch [t]")
+p_catch_medium <- ggplot(data = combs_dat[combs_dat$key == "catch_medium", ], 
+                         mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) + 
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "medium-term catch [t]")
+p_catch_short <- ggplot(data = combs_dat[combs_dat$key == "catch_short", ], 
+                        mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) + 
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "short-term catch [t]")
+p_risk1_long <- ggplot(data = combs_dat[combs_dat$key == "risk1_long", ], 
+                       mapping = aes(x = name, y = value, fill = scenario,
+                                     colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_long", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "long-term risk 1")
+p_risk1_medium <- ggplot(data = combs_dat[combs_dat$key == "risk1_medium", ], 
+                         mapping = aes(x = name, y = value, fill = scenario,
+                                       colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_medium", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "medium-term risk 1")
+p_risk1_short <- ggplot(data = combs_dat[combs_dat$key == "risk1_short", ], 
+                        mapping = aes(x = name, y = value, fill = scenario,
+                                      colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk3_short", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "short-term risk 1")
+p_risk3_long <- ggplot(data = combs_dat[combs_dat$key == "risk3_long", ], 
+                       mapping = aes(x = name, y = value, fill = scenario,
+                                     colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_long", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "long-term risk 3")
+p_risk3_medium <- ggplot(data = combs_dat[combs_dat$key == "risk3_medium", ], 
+                         mapping = aes(x = name, y = value, fill = scenario,
+                                       colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_medium", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "medium-term risk 3")
+p_risk3_short <- ggplot(data = combs_dat[combs_dat$key == "risk3_short", ], 
+                        mapping = aes(x = name, y = value, fill = scenario,
+                                      colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity", 
+           position = position_dodge2(preserve = "single")) + 
+  geom_blank(data = combs_dat[combs_dat$key == "risk1_short", ]) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "short-term risk 3")
+p_iav_long <- ggplot(data = combs_dat[combs_dat$key == "iav_long", ], 
+                     mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "long-term inter-annual catch variability")
+p_iav_medium <- ggplot(data = combs_dat[combs_dat$key == "iav_medium", ], 
+                       mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "medium-term inter-annual catch variability")
+p_iav_short <- ggplot(data = combs_dat[combs_dat$key == "iav_short", ], 
+                      mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 1.5)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "short-term inter-annual catch variability")
+p_ssb_long <- ggplot(data = combs_dat[combs_dat$key == "ssb_long", ], 
+                     mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 3e+5)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "long-term SSB [t]") +
+  theme(legend.direction = "horizontal")
+p_ssb_medium <- ggplot(data = combs_dat[combs_dat$key == "ssb_medium", ], 
+                       mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) + 
+  coord_cartesian(ylim = c(0, 3e+5)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "medium-term SSB [t]") +
+  theme(legend.direction = "horizontal")
+p_ssb_short <- ggplot(data = combs_dat[combs_dat$key == "ssb_short", ], 
+                      mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  coord_cartesian(ylim = c(0, 3e+5)) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "short-term SSB [t]") +
+  theme(legend.direction = "horizontal") +
+  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
+                     limits = c(0, NA))
+p_recovery_proportion <- 
+  ggplot(data = combs_dat[combs_dat$key == "recovery_proportion", ], 
+         mapping = aes(x = name, y = value, fill = scenario, colour = scenario)) +
+  geom_bar(show.legend = FALSE, stat = "identity",
+           position = position_dodge2(preserve = "single")) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "recovery proportion")
+p_recovery_time <- 
+  ggplot(data = combs_dat[combs_dat$key == "recovery_time", ], 
+         mapping = aes(x = name, y = value, colour = scenario)) +
+  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
+               position = position_dodge2(preserve = "single")) +
+  theme_bw() + ylim(0, NA) +
+  labs(x = "", y = "recovery time [years]")
+
+plot_grid(plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long,
+                    p_ssb_long + theme(legend.position = "none"),
+                    align = "hv"),
+          get_legend(p_ssb_long), nrow = 2, rel_heights = c(1, 0.1))
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
+                         "baseOM_combs_long.png"), 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+plot_grid(plot_grid(p_catch_medium, p_risk1_medium, p_risk3_medium, p_iav_medium,
+                    p_ssb_medium + theme(legend.position = "none"),
+                    align = "hv"),
+          get_legend(p_ssb_medium), nrow = 2, rel_heights = c(1, 0.1))
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
+                         "baseOM_combs_medium.png"), 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+plot_grid(plot_grid(p_catch_short, p_risk1_short, p_risk3_short, p_iav_short,
+                    p_ssb_short + theme(legend.position = "none"),
+                    align = "hv"),
+          get_legend(p_ssb_short), nrow = 2, rel_heights = c(1, 0.1))
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
+                         "baseOM_combs_short.png"), 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+plot_grid(plot_grid(p_recovery_proportion, 
+                    p_recovery_time + theme(legend.position = "none"),
+                    align = "hv"),
+          get_legend(p_recovery_time), ncol = 2, rel_widths = c(0.5, 0.1))
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
+                         "baseOM_combs_recovery.png"), 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+
