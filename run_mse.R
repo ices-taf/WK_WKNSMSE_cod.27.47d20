@@ -243,7 +243,7 @@ input$iem <- NULL
 ### check conditions
 ### either manually requested or as part of HCR options 4-6 
 if (exists("BB")) {
-  if (isTRUE(as.logical(BB))) {
+  if (isTRUE(BB == 1)) {
     
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
     input$ctrl.mp$ctrl.is@args$BB <- TRUE
