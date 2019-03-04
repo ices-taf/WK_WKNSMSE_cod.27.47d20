@@ -499,7 +499,7 @@ plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
                      yr_start = 2018.5,
                      Blim = 107000, MSYBtrigger = 150000,
                      Flim = 0.54, Fmsy = 0.31,
-                     plot_iter = FALSE,
+                     plot_iter = FALSE, iters_plot = 0,
                      width = 30, height = 20) {
   
   ### get scenario
@@ -525,7 +525,7 @@ plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
   ### plot
   if (!isTRUE(plot_iter)) {
     ### plot percentiles
-    p <- plot(stk_i, probs = probs) +
+    p <- plot(stk_i, probs = probs, iter = iters_plot) +
       xlab("year") + geom_vline(xintercept = yr_start) +
         geom_hline(data = data.frame(qname = "SSB", data = Blim),
                    aes(yintercept = data), linetype = "dashed") +
@@ -535,7 +535,7 @@ plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
                    aes(yintercept = data), linetype = "dashed") +
         geom_hline(data = data.frame(qname = "F", data = Fmsy),
                    aes(yintercept = data), linetype = "solid") +
-        theme_bw() + ylim(0, NA) + 
+        theme_bw() + ylim(0, NA) + theme(legend.position = 0) + 
       facet_wrap(~ qname, ncol = 1, strip.position = "right", scales = "free_y",
                  labeller = as_labeller(c(
                    "Rec" = "Rec [1000]",
@@ -571,10 +571,11 @@ plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
   print(p)
   ### save plot
   if (isTRUE(save_plot)) {
-    ggsave(filename = paste0(path_res, 
-                             gsub(x = stats_i$file, pattern = ".rds", 
-                                  replacement = ""),
-                             ".png"),
+    filename <- paste0(path_res, gsub(x = stats_i$file, pattern = ".rds",
+                                      replacement = ""), 
+                       ifelse(isTRUE(iters_plot == 0), "", "_iters"),
+                       ".png")
+    ggsave(filename = filename,
            width = width, height = height, units = "cm", dpi = 300, 
            type = "cairo")
     
@@ -586,14 +587,14 @@ plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
 ### current HCR
 plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
          Btrigger_ = 150000, TACconstr_ = FALSE, BB_ = FALSE, 
-         overwrite_catch_history = TRUE)
+         overwrite_catch_history = TRUE, iters_plot = 1:5)
 ### A, B, C, AD, BE, CE
 combs <- data.frame(name = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"),
                     HCR = c("F0", "A", "A", "B", "C", "A", "B", "C"),
                     BB = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
                     TACconstr = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
-                    Btrigger = c(0, 150000, 170000, 160000, 170000, 190000, 130000,
-                                 140000),
+                    Btrigger = c(0, 150000, 170000, 160000, 170000, 190000,
+                                 130000, 140000),
                     Ftrgt = c(0, 0.31, 0.38, 0.38, 0.38, 0.40, 0.36, 0.36))
 combs <- rbind(cbind(combs, OM = "cod4"),
                cbind(combs, OM = "cod4_alt1"),
@@ -606,7 +607,13 @@ lapply(X = split(combs, seq(nrow(combs))), FUN = function(i) {
            overwrite_catch_history = TRUE,
            path_in = paste0("input/", i$OM, "/1000_20/"))
 })
-
+### plot with first five iterations
+lapply(X = split(combs, seq(nrow(combs))), FUN = function(i) {
+  plot_stk(stats = stats, OM_ = i$OM, HCR_ = i$HCR, Ftrgt_ = i$Ftrgt, 
+           Btrigger_ = i$Btrigger, TACconstr_ = i$TACconstr, BB_ = i$BB, 
+           overwrite_catch_history = TRUE, iters_plot = 1:5,
+           path_in = paste0("input/", i$OM, "/1000_20/"))
+})
 
 ### ------------------------------------------------------------------------ ###
 ### F=0 plot ####
