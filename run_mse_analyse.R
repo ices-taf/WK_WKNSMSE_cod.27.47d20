@@ -219,11 +219,32 @@ stats_new$F_maxed <- foreach(x = res_list, .packages = "FLCore",
 ### HCR BE, Btrigger = 190000, Ftrgt = 0.5, iteration 442
 ### HCR CE, Btrigger = 190000, Ftrgt = 0.5, iteration 442
 ### OM_alt2 HCR A, Btrigger = 190000, Ftrgt = 0.4, iteration 756
+### full A grid
+### Btrigger = 110000/120000/130000 & Ftrgt = 0.50
+### Btrigger = 120000 & Ftrgt = 0.49
+### always only once in one iteration
 
 stats <- rbind(stats, stats_new)
 stats <- stats[order(stats$file), ]
 saveRDS(object = stats, file = paste0(path_res, "stats.rds"))
 write.csv(x = stats, file = paste0("output/stats.csv"), row.names = FALSE)
+
+### ------------------------------------------------------------------------ ###
+### load full A grid ####
+### ------------------------------------------------------------------------ ###
+stats <- readRDS(paste0(path_res, "stats.rds"))
+stats_POD <- readRDS(paste0(path_res, "stats_POD.rds"))
+stats_POD <- stats_POD %>% filter(!file %in% stats$file)
+stats_POD <- stats_POD[!grepl(x = stats_POD$file, pattern = "*2.rds"), ]
+stats_POD$HPC <- "POD"
+
+# nrow(stats) + nrow(stats_POD)
+stats_full <- full_join(stats, stats_POD)
+stats_full <- stats_full[order(stats_full$file), ]
+# nrow(stats_full)
+saveRDS(object = stats_full, file = paste0(path_res, "stats2.rds"))
+write.csv(x = stats_full, file = paste0("output/stats2.csv"), row.names = FALSE)
+
 
 ### ------------------------------------------------------------------------ ###
 ### plot ####
@@ -272,7 +293,7 @@ grid <- function(dat, HCR = "A",
                         values = c("FALSE" = "red", "TRUE" = "black")) +
     theme_bw() +
     facet_wrap(~ paste0("median ", time, "-term catch [t]")) +
-    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    scale_x_continuous(breaks = unique(dat$Btrigger)) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
   ### risk
@@ -287,7 +308,7 @@ grid <- function(dat, HCR = "A",
                         values = c("FALSE" = "red", "TRUE" = "black")) +
     theme_bw() +
     facet_wrap(~ paste0(time, "-term risk 3")) +
-    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    scale_x_continuous(breaks = unique(dat$Btrigger)) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
   ### iav
@@ -304,7 +325,7 @@ grid <- function(dat, HCR = "A",
     theme_bw() +
     facet_wrap(~ paste0("median ", time, 
                         "-term inter-annual\ catch variability")) +
-    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    scale_x_continuous(breaks = unique(dat$Btrigger)) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
   ### SSB
@@ -321,7 +342,7 @@ grid <- function(dat, HCR = "A",
     theme_bw() +
     facet_wrap(~ paste0("median ", time, 
                         "-term SSB [t]")) +
-    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    scale_x_continuous(breaks = unique(dat$Btrigger)) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
   ### risk1
@@ -336,7 +357,7 @@ grid <- function(dat, HCR = "A",
                         values = c("FALSE" = "red", "TRUE" = "black")) +
     theme_bw() +
     facet_wrap(~ paste0(time, "-term risk 1")) +
-    scale_x_continuous(breaks = c(seq(from = 110, to = 190, by = 10))) +
+    scale_x_continuous(breaks = unique(dat$Btrigger)) +
     labs(x = expression(B[trigger]~"[1000t]"),
          y = expression(F[trgt]))
   ### highlight maximum
@@ -480,6 +501,26 @@ grid(dat = stats %>%
                 Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
      HCR = "C", time = "short")
 ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_CE_short.png", 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+### A - full grid
+grid(dat = stats_full %>%
+       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
+                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
+     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_long.png", 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+grid(dat = stats_full %>%
+       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
+                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
+     HCR = "A", time = "medium")
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_medium.png", 
+       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
+grid(dat = stats_full %>%
+       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
+                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
+     HCR = "A", time = "short")
+ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_short.png", 
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
@@ -644,7 +685,7 @@ plot(stkF0, probs = c(0.05, 0.25, 0.5, 0.75, 0.95)) +
   #                                          `Catch` = catch(stkF0),
   #                                          `F` = fbar(stkF0))), 
   #            aes(x = year, y = data, group = iter))
-ggsave(filename = paste0("output/runs/cod4/1000_20/", 
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
                          "stk_F0_10000iters.png"),
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 ### iterations
@@ -668,7 +709,7 @@ ggplot(data = stkF0_df[stkF0_df$iter %in% 1:1000, ],
              aes(yintercept = data), linetype = "dashed") +
   geom_hline(data = data.frame(qname = "F", data = 0.31),
              aes(yintercept = data), linetype = "solid")
-ggsave(filename = paste0("output/runs/cod4/1000_20/", 
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
                          "stk_F0_10000iters_iters.png"),
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
