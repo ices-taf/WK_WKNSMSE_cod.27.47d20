@@ -3,7 +3,7 @@
 .RData
 .Ruserdata
 *.Rproj
-output/*/
+output/runs/*
 input/*/
 test*
 *.Rmd
