@@ -1833,3 +1833,30 @@ ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/"
        width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
 
 
+### ------------------------------------------------------------------------ ###
+### plot risk over time ####
+### ------------------------------------------------------------------------ ###
+
+### get optimized A
+stkA_file <- stats %>% filter(OM == "cod4" & Ftrgt == 0.38 & Btrigger == 170000 &
+                   TACconstr == FALSE & BB == FALSE & HCR == "A")
+### get simulated SSB
+ssbA_new <- ssb(readRDS(paste0("output/runs/cod4/1000_20/", 
+                               stkA_file$file))@stock)
+### get historical SSB
+ssbA <- ssb(readRDS("input/cod4/1000_20/base_run.rds")$om@stock)
+### combine
+ssbA[, dimnames(ssbA_new)$year] <- ssbA_new
+### calculate annual risk
+riskA <- apply((ssbA < stkA_file$Blim), 2, mean)
+### plot
+ggplot(data = as.data.frame(window(riskA, start = 2018)), 
+       aes(x = year , y = data)) +
+  geom_line() +
+  theme_bw() +
+  labs(x = "year", y = "p(SSB<Blim)") +
+  geom_vline(data = data.frame(x = c(2018.5, 2023.5, 2028.5)),
+             aes(xintercept = x), linetype = "dashed")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
+                         "risk_A_optimized.png"), 
+       width = 15, height = 10, units = "cm", dpi = 300, type = "cairo")
