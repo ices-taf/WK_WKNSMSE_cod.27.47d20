@@ -722,6 +722,16 @@ lapply(X = split(combs, seq(nrow(combs))), FUN = function(i) {
            path_in = paste0("input/", i$OM, "/1000_20/"))
 })
 
+### add plot for A*D
+plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
+         Btrigger_ = 150000, TACconstr_ = TRUE, BB_ = TRUE, 
+         overwrite_catch_history = TRUE,
+         path_in = paste0("input/cod4/1000_20/"))
+plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
+         Btrigger_ = 150000, TACconstr_ = TRUE, BB_ = TRUE, 
+         overwrite_catch_history = TRUE, iters_plot = 1:5,
+         path_in = paste0("input/cod4/1000_20/"))
+
 ### ------------------------------------------------------------------------ ###
 ### F=0 plot ####
 ### ------------------------------------------------------------------------ ###
