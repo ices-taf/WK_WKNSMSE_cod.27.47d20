@@ -165,9 +165,9 @@ stats_new$iav_short <- foreach(x = res_list, .packages = "FLCore",
 stats_new$iav_medium <- foreach(x = res_list, .packages = "FLCore",
                                 .combine = "c") %dopar% {
   iav(object = catch(window(stock(x), start = 2023, end = 2028)), 
-      summary_all = mean)
+      summary_all = median)
 }
-### inter-annual variation of catch
+### inter-annual variation of TAC
 stats_new$iavTAC_long <- foreach(x = res_list, .packages = "FLCore",
                               .combine = "c") %dopar% {
   iav(object = window(x@tracking["metric.is"], start = 2028, end = 2037), 
@@ -181,7 +181,7 @@ stats_new$iavTAC_short <- foreach(x = res_list, .packages = "FLCore",
 stats_new$iavTAC_medium <- foreach(x = res_list, .packages = "FLCore",
                                 .combine = "c") %dopar% {
   iav(object = window(x@tracking["metric.is"], start = 2023, end = 2027), 
-      summary_all = mean)
+      summary_all = median)
 }
 ### SSB
 stats_new$ssb_median_long <- foreach(x = res_list, .packages = "FLCore",
