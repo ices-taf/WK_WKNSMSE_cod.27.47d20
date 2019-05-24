@@ -8,7 +8,7 @@ library(cowplot)
 library(dplyr)
 
 library(doParallel)
-cl <- makeCluster(10)
+cl <- makeCluster(parallel::detectCores() - 1)
 registerDoParallel(cl)
 
 ### load additional functions
@@ -1886,3 +1886,135 @@ ggplot(data = as.data.frame(window(riskA, start = 2018)),
 ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
                          "risk_A_optimized.png"), 
        width = 15, height = 10, units = "cm", dpi = 300, type = "cairo")
+
+
+### for 10,000 iterations - 50 years - projection, A*
+res10000 <- readRDS("output/runs/cod4/10000_50_base.rds")
+risk_t <- apply(ssb(res10000@stock) < 107000, 2, mean)
+ggplot(data = as.data.frame(window(risk_t, start = 2018)), 
+       aes(x = year , y = data)) +
+  geom_line() +
+  theme_bw() +
+  labs(x = "year", y = "p(SSB<Blim)") +
+  geom_vline(data = data.frame(x = c(#2018.5, 2023.5, 
+                                     2028.5, 2038.5)),
+             aes(xintercept = x), linetype = "dashed")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
+                         "risk_A_star_10000.png"), 
+       width = 15, height = 10, units = "cm", dpi = 300, type = "cairo")
+
+
+### ------------------------------------------------------------------------ ###
+### summary table(s) for report ####
+### ------------------------------------------------------------------------ ###
+
+### HCR options
+res <- stats %>%
+  filter((file == "cod4_F0.rds") |
+           (OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt == 0.31 & Btrigger == 150000) |
+           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt == 0.31 & Btrigger == 150000) |
+           (OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt == 0.38 & Btrigger == 170000) |
+           (OM == "cod4" & HCR == "B" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt == 0.38 & Btrigger == 160000) |
+           (OM == "cod4" & HCR == "C" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt == 0.38 & Btrigger == 170000) |
+           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt == 0.40 & Btrigger == 190000) |
+           (OM == "cod4" & HCR == "B" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt == 0.36 & Btrigger == 130000) |
+           (OM == "cod4" & HCR == "C" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt == 0.36 & Btrigger == 140000)
+         ) %>%
+  select(HCR, BB, Ftrgt, Btrigger, 
+         catch_median_long, ssb_median_long, fbar_median_long,
+         iav_long, iavTAC_long, risk3_long, risk1_long, 
+         catch_median_medium, ssb_median_medium, fbar_median_medium, 
+         iav_medium, iavTAC_medium, risk3_medium, risk1_medium, 
+         catch_median_short, ssb_median_short, fbar_median_short, 
+         iav_short, iavTAC_short, risk3_short, risk1_short,
+         conv_failed, F_maxed, recovery_proportion, recovery_time)
+res$MS <- c("F=0", "A*", "A*+D", "A", "A+D", "B+E", "B", "C+E", "C")
+res <- res[c(1, 2, 3, 4, 7, 9, 5, 6, 8), c(30, 3:29)]
+names(res) <- c("MS", "Ftrgt", "Btrigger",
+                c(t(outer(c("long-term", "medium-term", "short-term"),
+                      c("median catch", "median SSB", "realized mean F",
+                        "ICV", "ITV", "risk3", "risk1"), paste))),
+                "convergence failure", "Fmax reached",
+                "recovery proportion", "median recovery time")
+res[, c(3:5, 11, 12, 18, 19)] <- round(res[, c(3:5, 11, 12, 18, 19)])
+res[, c(6:10, 13:17, 20:24, 27)] <- round(res[, c(6:10, 13:17, 20:24, 27)], 3)
+res <- apply(res, 2, as.character)
+res <- t(res)
+
+### sensitivity
+res <- stats %>%
+  filter((OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) & 
+            Btrigger == 170000) |
+           (OM == "cod4" & HCR == "B" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) & 
+              Btrigger == 160000) |
+           (OM == "cod4" & HCR == "C" & BB == FALSE & TACconstr == FALSE &
+              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) &
+              Btrigger == 170000) |
+           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt %in% round(c(0.198, 0.4 * c(0.9, 1, 1.1), 0.46), 3) & 
+              Btrigger == 190000) |
+           (OM == "cod4" & HCR == "B" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt %in% round(c(0.198, 0.36 * c(0.9, 1, 1.1), 0.46), 3) & 
+              Btrigger == 130000) |
+           (OM == "cod4" & HCR == "C" & BB == TRUE & TACconstr == TRUE &
+              Ftrgt %in% round(c(0.198, 0.36 * c(0.9, 1, 1.1), 0.46), 3) & 
+              Btrigger == 140000)
+  ) %>%
+  select(HCR, BB, Ftrgt, Btrigger, 
+         "long-term median catch" = catch_median_long, 
+         "long-term median SSB" = ssb_median_long, 
+         "long-term realized mean F" = fbar_median_long,
+         "long-term ICV" = iav_long, "long-term ITV" = iavTAC_long, 
+         "long-term risk3" = risk3_long, "long-term risk1" = risk1_long, 
+         "medium-term median catch" = catch_median_medium, 
+         "medium-term median SSB" = ssb_median_medium, 
+         "medium-term realized mean F" = fbar_median_medium, 
+         "medium-term ICV" = iav_medium, "medium-term IRV" = iavTAC_medium,
+         "medium-term risk3" = risk3_medium, 
+         "medium-term risk1" = risk1_medium, 
+         "short-term median catch" = catch_median_short, 
+         "short-term median SSB" = ssb_median_short, 
+         "short-term realized mean F" = fbar_median_short, 
+         "short-term ICV" = iav_short, "short-term ITV" = iavTAC_short, 
+         "short-term risk3" = risk3_short, "short-term risk1" = risk1_short,
+         "convergence failure" = conv_failed, "Fmax reached" = F_maxed, 
+         "recovery proportion" = recovery_proportion, 
+         "median recovery time" = recovery_time) %>%
+  arrange(HCR, BB, Ftrgt) %>%
+  mutate(column = rep(c("FMSY lower", "Ftrgt * 0.9", "Ftrgt", "Ftrgt * 1.1",
+                "FMSY upper"), 6),
+         MS = HCR,
+         MS = ifelse(BB == TRUE & HCR == "A", paste0(HCR, "+D"), MS),
+         MS = ifelse(BB == TRUE & HCR %in% c("B", "C"), paste0(HCR, "+E"), MS)) %>%
+  select(MS, column, Ftrgt:"median recovery time")
+res[, c(4:6, 12, 13, 19, 20)] <- round(res[, c(4:6, 12, 13, 19, 20)])
+res[, c(7:11, 14:18, 21:25, 28)] <- round(res[, c(7:11, 14:18, 21:25, 28)], 3)
+res <- as.data.frame(apply(res, 2, as.character), stringsAsFactors = FALSE)
+#res <- t(res)
+
+res_list <- split(res, res$MS)
+res_list <- lapply(names(res_list), function(x) {
+  tmp <- as.data.frame(t(res_list[[x]][, -1]), stringsAsFactors = FALSE)
+  names(tmp) <- tmp[1, ]
+  tmp <- tmp[-1, ]
+  tmp$HCR = x
+  tmp$column = rownames(tmp)
+  tmp <- tmp[, c("HCR", "column", "FMSY lower", "Ftrgt * 0.9", "Ftrgt", "Ftrgt * 1.1", "FMSY upper")]
+  rownames(tmp) <- NULL
+  tmp
+})
+names(res_list) <- names(split(res, res$MS))
+res_list <- res_list[c("A", "B", "C", "A+D", "B+E", "C+E")]
+res_list <- do.call(rbind, res_list)
+row.names(res_list) <- NULL
+
