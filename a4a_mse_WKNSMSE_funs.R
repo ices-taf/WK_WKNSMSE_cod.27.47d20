@@ -1184,7 +1184,7 @@ SAM_uncertainty <- function(fit, n = 1000, print_screen = FALSE,
   
   } else {
     
-    idx_cov <- NULL
+    survey_cov <- NULL
     
   }
   
