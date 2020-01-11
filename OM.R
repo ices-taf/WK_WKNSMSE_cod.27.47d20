@@ -24,6 +24,7 @@ library(mse)
 library(FLash)
 library(tidyr)
 library(dplyr)
+library(doParallel)
 
 source("a4a_mse_WKNSMSE_funs.R")
 
