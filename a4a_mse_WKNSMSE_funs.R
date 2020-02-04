@@ -320,7 +320,7 @@ SAM_wrapper <- function(stk, idx, tracking,
     ### get recent TAC
     if (args$iy == ay) {
       ### in first year of simulation, use value from OM saved earlier in ay
-      TAC_last <- tracking["metric.is", ac(ay)]
+      TAC_last <- tracking["C.om", ac(ay)]
     } else {
       ### in following years, use TAC advised the year before
       TAC_last <- tracking["metric.is", ac(ay - 1)]
@@ -683,7 +683,11 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     yr_target <- ctrl@target$year
     
     ### get previous target from tracking
-    catch_prev <- tracking["metric.is", ac(yr_target - 1), drop = TRUE]
+    if (args$iy == ay) {
+      catch_prev <- TAC_last
+    } else {
+      catch_prev <- tracking["metric.is", ac(yr_target - 1), drop = TRUE]
+    }
     
     ### change in advice, % of last advice
     change <- (catch_target / catch_prev) * 100
