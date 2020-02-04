@@ -97,7 +97,7 @@ calc_survey_ind <- function(stk, idx,
 oem_WKNSMSE <- function(stk, 
                         deviances, 
                         observations, 
-                        genArgs, 
+                        args, 
                         tracking, 
                         catch_timing = -1, ### catch timing relative to ay
                         idx_timing = -1, ### index timing relative to ay
@@ -108,7 +108,7 @@ oem_WKNSMSE <- function(stk,
                         ...) {
   #browser()
   ### current (assessment) year
-  ay <- genArgs$ay
+  ay <- args$ay
   
   
   ### Density-dependent M
@@ -227,7 +227,7 @@ oem_WKNSMSE <- function(stk,
 ### this makes used of the SAM wrapper in FLfse,
 ### which in turn calls SAM from the package stockassessment
 SAM_wrapper <- function(stk, idx, tracking,
-                        genArgs, ### contains ay (assessment year)
+                        args, ### contains ay (assessment year)
                         forecast = FALSE,
                         fwd_trgt = "fsq", ### what to target in forecast
                         fwd_yrs = 1, ### number of years to add
@@ -243,10 +243,10 @@ SAM_wrapper <- function(stk, idx, tracking,
                         ...){
   
   ### get additional arguments
-  args <- list(...)
+  args <- c(args, list(...))
   
   ### get current (assessment) year
-  ay <- genArgs$ay
+  ay <- args$ay
   
   ### check if initial parameter values for SAM exist from last year's fit
   ### and reuse if possible
@@ -318,7 +318,7 @@ SAM_wrapper <- function(stk, idx, tracking,
       catchval <- c(catchval, tail(catchval, 1))
     }
     ### get recent TAC
-    if (genArgs$iy == ay) {
+    if (args$iy == ay) {
       ### in first year of simulation, use value from OM saved earlier in ay
       TAC_last <- tracking["metric.is", ac(ay)]
     } else {
@@ -454,7 +454,7 @@ phcr_WKNSMSE <- function(Btrigger = NULL, Ftrgt = NULL, Bpa = NULL, Fpa = NULL,
 ### target Ftrgt
 ### A: if SSB < Btrigger, target reduced: Ftrgt * SSB/Btrigger
 ### B & C: different behaviour if SSB < Blim
-hcr_WKNSME <- function(stk, genArgs, hcrpars, tracking, 
+hcr_WKNSME <- function(stk, args, hcrpars, tracking, 
                        option = "A", ### WKNSMSE options
                        ...) {
   
@@ -462,7 +462,7 @@ hcr_WKNSME <- function(stk, genArgs, hcrpars, tracking,
   ### reduce F if SSB below Btrigger
   
   ### get current (assessment) year
-  ay <- genArgs$ay
+  ay <- args$ay
   ### number of iterations
   it <- dim(stk)[6]
   
@@ -551,7 +551,7 @@ hcr_WKNSME <- function(stk, genArgs, hcrpars, tracking,
 ### short term forecast with SAM
 ### including TAC constraint
 is_WKNSMSE <- function(stk, tracking, ctrl,
-                       genArgs, ### contains ay (assessment year)
+                       args, ### contains ay (assessment year)
                        TAC_constraint = c(FALSE, TRUE),
                        upper = Inf, lower = -Inf, Btrigger_cond = FALSE,
                        ### short term forecast
@@ -573,7 +573,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
                        ...) {
   
   ### get current (assessment) year
-  ay <- genArgs$ay
+  ay <- args$ay
   ### number of iterations
   it <- dim(stk)[6]
   
@@ -599,7 +599,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   }
   
   ### get recent TAC
-  if (genArgs$iy == ay) {
+  if (args$iy == ay) {
     ### in first year of simulation, use value from OM saved earlier in ay
     TAC_last <- tracking["metric.is", ac(ay)]
   } else {
@@ -730,7 +730,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   if (isTRUE(BB)) {
     
     ### get current rho
-    BB_rho_i <- tail(rep(BB_rho, length.out = (ay - genArgs$y0)), 1)
+    BB_rho_i <- tail(rep(BB_rho, length.out = (ay - args$y0)), 1)
     
     ### get catch borrowed last year
     BB_return <- tracking["BB_borrow", ac(ay - 1)]
@@ -913,14 +913,14 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
 ### so far only banking and borrowing (B&B) implemented
 
 iem_WKNSMSE <- function(tracking, ctrl,
-                        genArgs, ### contains ay (assessment year)
+                        args, ### contains ay (assessment year)
                         BB = FALSE, ### apply banking and borrowing
                        ...) {
   
   if (isTRUE(BB)) {
     
     ### get current (assessment) year
-    ay <- genArgs$ay
+    ay <- args$ay
     
     ### retrieve banking and borrowing values
     BB_return <- tracking["BB_return", ac(ay)]

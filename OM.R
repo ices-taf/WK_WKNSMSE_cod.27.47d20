@@ -734,7 +734,7 @@ cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_splitLD = TRUE)
 
 ### some arguments (passed to mp())
-genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+args <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
                 y0 = dims(stk_fwd)$minyear, ### first data year
                 iy = yr_data, ### first simulation (intermediate) year
                 nsqy = 3, ### not used, but has to provided
@@ -768,7 +768,7 @@ oem <- FLoem(method = oem_WKNSMSE,
 
 ### default management
 ctrl_obj <- mpCtrl(list(
-  ctrl.est = mseCtrl(method = SAM_wrapper,
+  est = mseCtrl(method = SAM_wrapper,
                      args = c(### short term forecast specifications
                        forecast = TRUE, 
                        fwd_trgt = "fsq", fwd_yrs = 1, 
@@ -781,10 +781,10 @@ ctrl_obj <- mpCtrl(list(
                        conf = list(cod4_conf_sam_no_mult),
                        parallel = FALSE ### TESTING ONLY
                      )),
-  ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
+  phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
-  ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  ctrl.is = mseCtrl(method = is_WKNSMSE, 
+  hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
+  is = mseCtrl(method = is_WKNSMSE, 
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
@@ -799,14 +799,14 @@ ctrl_obj <- mpCtrl(list(
                              #BB_check_fc = TRUE,
                              #BB_rho = list(c(-0.1, 0.1))
                     ))#,
-  #ctrl.tm = NULL
+  #tm = NULL
 ))
 ### additional tracking metrics
 tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 
 ### save mse objects
-input <- list(om = om, oem = oem, ctrl.mp = ctrl_obj,
-              genArgs = genArgs, tracking = tracking_add)
+input <- list(om = om, oem = oem, ctrl = ctrl_obj,
+              args = args, tracking = tracking_add)
 saveRDS(object = input, 
         file = paste0(input_path, "base_run.rds"))
 # input <- readRDS(paste0(input_path, "/base_run.rds"))
@@ -822,47 +822,20 @@ saveRDS(object = input,
 # res1 <- mp(om = input$om,
 #            oem = input$oem,
 #            #iem = iem,
-#            ctrl.mp = input$ctrl.mp,
-#            genArgs = input$genArgs,
+#            ctrl = input$ctrl,
+#            args = input$args,
 #            tracking = input$tracking)
 
+debugonce(mp)
+debugonce(goFish)
+res1 <- mp(om = input$om,
+           oem = input$oem,
+           #iem = iem,
+           ctrl = input$ctrl,
+           args = input$args,
+           tracking = input$tracking)
 
 
-### ------------------------------------------------------------------------ ###
-### create MSE input objects for running fixed F=0 ####
-### ------------------------------------------------------------------------ ###
-
-# ### load image with objects for 10,000 iterations and 100 years
-# load(file = "input/cod4/10000_100/image.RData")
-# ### genArgs
-# genArgs_F0 <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
-#                    y0 = dims(stk_fwd)$minyear, ### first data year
-#                    iy = yr_data, ### first simulation (intermediate) year
-#                    nsqy = 3, ### not used, but has to provided
-#                    nblocks = 1, ### block for parallel processing
-#                    seed = 1 ### random number seed before starting MSE
-# )
-# ### OM
-# om_F0 <- FLom(stock = stk_fwd, sr = sr,
-#               projection = mseCtrl(method = fwd_WKNSMSE, 
-#                                    args = list(maxF = 2,
-#                                                proc_res = "fitted"
-#                                                )))
-# ### define target
-# ctrl_F0 <- mpCtrl(list(
-#   ctrl.hcr = mseCtrl(method = fixedF.hcr, 
-#                      args = list(ftrg = 0))))
-# ### fake OEM, otherwise mp falls over...
-# oem_F0 <- FLoem(observations = list(stk = FLQuant(0)), 
-#                 deviances = list(stk = FLQuant(0))
-# )
-# 
-# ### combine elements
-# input_F0 <- list(om = om_F0, oem = oem_F0, ctrl.mp = ctrl_F0, 
-#                  genArgs = genArgs_F0)
-# 
-# ### save
-# saveRDS(object = input_F0, file = "input/cod4/10000_100/data_F0.RData")
 
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
