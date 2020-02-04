@@ -34,6 +34,12 @@ dir.create(path = "output/runs/cod4", recursive = TRUE)
 ### create plots and print to screen?
 verbose <- TRUE
 
+
+### the original WKNSMSE was run with R 3.5
+### for exact reproducibility in R 3.6, the random number generation must be
+### be changed
+if (getRversion() >= 3.6) RNGkind(sample.kind = "Rounding")
+
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
 ### ------------------------------------------------------------------------ ###
