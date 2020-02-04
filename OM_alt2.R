@@ -34,6 +34,12 @@ dir.create(path = "output/runs/cod4_alt2", recursive = TRUE)
 ### create plots and print to screen?
 verbose <- TRUE
 
+
+### the original WKNSMSE was run with R 3.5
+### for exact reproducibility in R 3.6, the random number generation must be
+### be changed
+if (getRversion() >= 3.6) RNGkind(sample.kind = "Rounding")
+
 ### ------------------------------------------------------------------------ ###
 ### simulation specifications ####
 ### ------------------------------------------------------------------------ ###
@@ -647,7 +653,7 @@ cod4_stf_def <- list(fwd_yrs_average = -3:0,
                      fwd_splitLD = TRUE)
 
 ### some arguments (passed to mp())
-genArgs <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
+args <- list(fy = dims(stk_fwd)$maxyear, ### final simulation year
                 y0 = dims(stk_fwd)$minyear, ### first data year
                 iy = yr_data, ### first simulation (intermediate) year
                 nsqy = 3, ### not used, but has to provided
@@ -681,7 +687,7 @@ oem <- FLoem(method = oem_WKNSMSE,
 
 ### default management
 ctrl_obj <- mpCtrl(list(
-  ctrl.est = mseCtrl(method = SAM_wrapper,
+  est = mseCtrl(method = SAM_wrapper,
                      args = c(### short term forecast specifications
                        forecast = TRUE, 
                        fwd_trgt = "fsq", fwd_yrs = 1, 
@@ -694,10 +700,10 @@ ctrl_obj <- mpCtrl(list(
                        conf = list(cod4_est_conf_no_mult), # don't include correlations in estimation
                        parallel = FALSE ### TESTING ONLY
                      )),
-  ctrl.phcr = mseCtrl(method = phcr_WKNSMSE,
+  phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
-  ctrl.hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  ctrl.is = mseCtrl(method = is_WKNSMSE, 
+  hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
+  isys = mseCtrl(method = is_WKNSMSE, 
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
@@ -718,8 +724,8 @@ ctrl_obj <- mpCtrl(list(
 tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
 
 ### save mse objects
-input <- list(om = om, oem = oem, ctrl.mp = ctrl_obj,
-              genArgs = genArgs, tracking = tracking_add)
+input <- list(om = om, oem = oem, ctrl = ctrl_obj,
+              args = args, tracking = tracking_add)
 saveRDS(object = input, 
         file = paste0(input_path, "base_run.rds"))
 # input <- readRDS(paste0(input_path, "/base_run.rds"))
@@ -735,8 +741,8 @@ saveRDS(object = input,
 res1 <- mp(om = input$om,
            oem = input$oem,
            #iem = iem,
-           ctrl.mp = input$ctrl.mp,
-           genArgs = input$genArgs,
+           ctrl = input$ctrl,
+           args = input$args,
            tracking = input$tracking)
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
