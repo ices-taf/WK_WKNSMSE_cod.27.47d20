@@ -784,7 +784,7 @@ ctrl_obj <- mpCtrl(list(
   phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
   hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  is = mseCtrl(method = is_WKNSMSE, 
+  isys = mseCtrl(method = is_WKNSMSE, 
                     args = c(hcrpars = list(refpts_mse),
                              ### for short term forecast
                              fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
