@@ -103,7 +103,7 @@ path_data <- paste0("input/", OM_alt, "/", iters, "_", years, "/")
 input <- readRDS(paste0(path_data, "base_run.rds"))
 
 ### modify input for running in parallel
-input$genArgs$nblocks <- nblocks
+input$args$nblocks <- nblocks
 
 ### ------------------------------------------------------------------------ ###
 ### set up HCR & options ####
@@ -113,7 +113,7 @@ input$genArgs$nblocks <- nblocks
 ### set HCR option: A, B, C
 if (exists("HCRoption")) {
   
-  input$ctrl.mp$ctrl.hcr@args$option <- switch(HCRoption, 
+  input$ctrl$hcr@args$option <- switch(HCRoption, 
                                                "1" = "A", 
                                                "2" = "B", 
                                                "3" = "C",
@@ -122,12 +122,12 @@ if (exists("HCRoption")) {
                                                "6" = "C")
   
   cat(paste0("\nSetting custom HCR option: HCRoption = ", HCRoption, 
-             " => HCR ", input$ctrl.mp$ctrl.hcr@args$option, "\n\n"))
+             " => HCR ", input$ctrl$hcr@args$option, "\n\n"))
   
 } else {
   
   cat(paste0("\nUsing default HCR option: HCR ", 
-             input$ctrl.mp$ctrl.hcr@args$option, "\n\n"))
+             input$ctrl$hcr@args$option, "\n\n"))
   HCRoption <- 0
   
 }
@@ -162,13 +162,13 @@ if (exists("HCR_comb")) {
   
   ### set Btrigger
   Btrigger <- hcr_vals[HCR_comb, "Btrigger"]
-  input$ctrl.mp$ctrl.phcr@args$Btrigger <- Btrigger
-  input$ctrl.mp$ctrl.is@args$hcrpars$Btrigger <- Btrigger
+  input$ctrl$phcr@args$Btrigger <- Btrigger
+  input$ctrl$isys@args$hcrpars$Btrigger <- Btrigger
   
   ### set Ftrgt
   Ftrgt <- hcr_vals[HCR_comb, "Ftrgt"]
-  input$ctrl.mp$ctrl.phcr@args$Ftrgt <- Ftrgt
-  input$ctrl.mp$ctrl.is@args$hcrpars$Ftrgt <- Ftrgt
+  input$ctrl$phcr@args$Ftrgt <- Ftrgt
+  input$ctrl$isys@args$hcrpars$Ftrgt <- Ftrgt
   
   cat(paste0("\nSetting custom Btrigger/Ftrgt values.\n",
              "Using HCR_comb = ", HCR_comb, "\n",
@@ -178,8 +178,8 @@ if (exists("HCR_comb")) {
 } else {
   
   cat(paste0("\nUsing default Btrigger/Ftrgt values.\n",
-             "Ftrgt = ", input$ctrl.mp$ctrl.phcr@args$Ftrgt, "\n",
-             "Btrigger = ", input$ctrl.mp$ctrl.phcr@args$Btrigger, "\n\n"))
+             "Ftrgt = ", input$ctrl$phcr@args$Ftrgt, "\n",
+             "Btrigger = ", input$ctrl$phcr@args$Btrigger, "\n\n"))
   
 }
 ### try uniform grid search with iteration-specific Ftrgt/Btrgigger combination
@@ -190,12 +190,12 @@ if (exists("grid_search")) {
                             Ftrgt = seq(from = 0.1, to = 0.49, length.out = 40))
     ### set Btrigger
     Btrigger <- hcr_vals$Btrigger
-    input$ctrl.mp$ctrl.phcr@args$Btrigger <- Btrigger
-    input$ctrl.mp$ctrl.is@args$hcrpars$Btrigger <- Btrigger
+    input$ctrl$phcr@args$Btrigger <- Btrigger
+    input$ctrl$isys@args$hcrpars$Btrigger <- Btrigger
     ### set Ftrgt
     Ftrgt <- hcr_vals$Ftrgt
-    input$ctrl.mp$ctrl.phcr@args$Ftrgt <- Ftrgt
-    input$ctrl.mp$ctrl.is@args$hcrpars$Ftrgt <- Ftrgt
+    input$ctrl$phcr@args$Ftrgt <- Ftrgt
+    input$ctrl$isys@args$hcrpars$Ftrgt <- Ftrgt
     cat(paste0("\nTrying uniform Btrigger/Ftrgt combinations.\n"))
     
   }
@@ -203,23 +203,23 @@ if (exists("grid_search")) {
 
 ### ------------------------------------------------------------------------ ###
 ### TAC constraint
-input$ctrl.mp$ctrl.is@args$TAC_constraint <- FALSE
+input$ctrl$isys@args$TAC_constraint <- FALSE
 ### check conditions
 ### either manually requested or as part of HCR options 4-6 
 if (exists("TAC_constraint")) {
   if (isTRUE(as.logical(TAC_constraint))) {
-    input$ctrl.mp$ctrl.is@args$TAC_constraint <- TRUE
+    input$ctrl$isys@args$TAC_constraint <- TRUE
   }
 }
 if (HCRoption %in% 4:6) {
-    input$ctrl.mp$ctrl.is@args$TAC_constraint <- TRUE
+    input$ctrl$isys@args$TAC_constraint <- TRUE
 }
 ### implement
-if (isTRUE(input$ctrl.mp$ctrl.is@args$TAC_constraint)) {
+if (isTRUE(input$ctrl$isys@args$TAC_constraint)) {
     
-    input$ctrl.mp$ctrl.is@args$lower <- 80
-    input$ctrl.mp$ctrl.is@args$upper <- 125
-    input$ctrl.mp$ctrl.is@args$Btrigger_cond <- TRUE
+    input$ctrl$isys@args$lower <- 80
+    input$ctrl$isys@args$upper <- 125
+    input$ctrl$isys@args$Btrigger_cond <- TRUE
     
     cat(paste0("\nImplementing TAC constraint.\n\n"))
     
@@ -231,13 +231,13 @@ if (isTRUE(input$ctrl.mp$ctrl.is@args$TAC_constraint)) {
 ### manual overwrite/removal of BB if requested
 if (exists("TAC_constraint")) {
   if (isTRUE(TAC_constraint == -1)) {
-    input$ctrl.mp$ctrl.is@args$TAC_constraint <- FALSE
+    input$ctrl$isys@args$TAC_constraint <- FALSE
   }
 }
 
 ### ------------------------------------------------------------------------ ###
 ### banking & borrowing
-input$ctrl.mp$ctrl.is@args$BB <- FALSE
+input$ctrl$isys@args$BB <- FALSE
 input$iem <- NULL
 
 ### check conditions
@@ -246,10 +246,10 @@ if (exists("BB")) {
   if (isTRUE(BB == 1)) {
     
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
-    input$ctrl.mp$ctrl.is@args$BB <- TRUE
-    input$ctrl.mp$ctrl.is@args$BB_check_hcr <- TRUE
-    input$ctrl.mp$ctrl.is@args$BB_check_fc <- TRUE
-    input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
+    input$ctrl$isys@args$BB <- TRUE
+    input$ctrl$isys@args$BB_check_hcr <- TRUE
+    input$ctrl$isys@args$BB_check_fc <- TRUE
+    input$ctrl$isys@args$BB_rho <- c(-0.1, 0.1)
     
   }
 
@@ -258,18 +258,18 @@ if (exists("BB")) {
 if (HCRoption %in% 4:6) {
     
   input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
-  input$ctrl.mp$ctrl.is@args$BB <- TRUE
-  input$ctrl.mp$ctrl.is@args$BB_rho <- c(-0.1, 0.1)
-  input$ctrl.mp$ctrl.is@args$BB_check_hcr <- FALSE
-  input$ctrl.mp$ctrl.is@args$BB_check_fc <- FALSE
+  input$ctrl$isys@args$BB <- TRUE
+  input$ctrl$isys@args$BB_rho <- c(-0.1, 0.1)
+  input$ctrl$isys@args$BB_check_hcr <- FALSE
+  input$ctrl$isys@args$BB_check_fc <- FALSE
   
   if (HCRoption %in% 4) {
     
-    input$ctrl.mp$ctrl.is@args$BB_check_hcr <- TRUE
+    input$ctrl$isys@args$BB_check_hcr <- TRUE
     
   } else if (HCRoption %in% 5:6) {
     
-    input$ctrl.mp$ctrl.is@args$BB_check_fc <- TRUE
+    input$ctrl$isys@args$BB_check_fc <- TRUE
     
   }
   
@@ -279,7 +279,7 @@ if (exists("BB")) {
   if (isTRUE(BB == -1)) {
     
     input$iem <- NULL
-    input$ctrl.mp$ctrl.is@args$BB <- FALSE
+    input$ctrl$isys@args$BB <- FALSE
     
   }
   
@@ -305,19 +305,19 @@ if (!is.null(input$iem)) {
 res1 <- mp(om = input$om,
            oem = input$oem,
            iem = input$iem,
-           ctrl.mp = input$ctrl.mp,
-           genArgs = input$genArgs,
+           ctrl = input$ctrl,
+           args = input$args,
            tracking = input$tracking)
 
 ### save results
 path_out <- paste0("output/runs/cod4/", iters, "_", years)
 dir.create(path = path_out, recursive = TRUE)
 file_out <- paste0(OM_alt, "_",
-                   "HCR-", input$ctrl.mp$ctrl.hcr@args$option[1],
-                   "_Ftrgt-", input$ctrl.mp$ctrl.phcr@args$Ftrgt[1],
-                   "_Btrigger-", input$ctrl.mp$ctrl.phcr@args$Btrigger[1],
-                   "_TACconstr-", input$ctrl.mp$ctrl.is@args$TAC_constraint[1],
-                   "_BB-", input$ctrl.mp$ctrl.is@args$BB[1]
+                   "HCR-", input$ctrl$hcr@args$option[1],
+                   "_Ftrgt-", input$ctrl$phcr@args$Ftrgt[1],
+                   "_Btrigger-", input$ctrl$phcr@args$Btrigger[1],
+                   "_TACconstr-", input$ctrl$isys@args$TAC_constraint[1],
+                   "_BB-", input$ctrl$isys@args$BB[1]
 )
 
 saveRDS(object = res1, paste0(path_out, "/", file_out, ".rds"))
