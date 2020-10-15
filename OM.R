@@ -25,6 +25,7 @@ library(FLash)
 library(tidyr)
 library(dplyr)
 library(doParallel)
+library(scales)
 
 source("a4a_mse_WKNSMSE_funs.R")
 
@@ -458,7 +459,7 @@ stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
 
 
 ### ------------------------------------------------------------------------ ###
-### indices ####
+### indices - not used in shortcut approach ####
 ### ------------------------------------------------------------------------ ###
 ### use real FLIndices object as template (included in FLfse)
 idx <- cod4_idx
@@ -469,10 +470,10 @@ idx <- lapply(idx, propagate, n)
 
 ### insert catchability
 for (idx_i in seq_along(idx)) {
-  
+
   ### set catchability for projection
   index.q(idx[[idx_i]])[] <- uncertainty$survey_catchability[[idx_i]]
-  
+
 }
 ### create copy of index with original values
 idx_raw <- lapply(idx ,index)
@@ -494,21 +495,21 @@ for (idx_i in seq_along(idx_dev)) {
   idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
 }
 
-### modify residuals for historical period so that index values passed to 
+### modify residuals for historical period so that index values passed to
 ### stock assessment are the ones observed in reality
 ### IBTS Q1, values up to 2018
-idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <- 
+idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <-
   idx_raw$IBTS_Q1_gam[, dimnames(idx_raw$IBTS_Q1_gam)$year <= 2018] /
   index(idx$IBTS_Q1_gam)[, dimnames(idx$IBTS_Q1_gam@index)$year <= 2018]
 ### IBTS Q3, values up to 2017
-idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <- 
+idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <-
   idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2017] /
   index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam@index)$year <= 2017]
 
 if (isTRUE(verbose)) {
 
   ### compare simulated to original survey(s)
-  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
+  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
                          cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
                          sim_q1 = (index(idx$IBTS_Q1_gam)),
                          sim_q3 = (index(idx$IBTS_Q3_gam))
@@ -546,10 +547,10 @@ if (isTRUE(verbose)) {
 ### create noise for catch
 set.seed(5)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
-catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
+catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0,
                             sd = uncertainty$catch_sd)
 ### the catch_res values are on a normale scale,
-### exponentiate to get log-normal 
+### exponentiate to get log-normal
 catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
 
@@ -558,6 +559,222 @@ catch_res <- exp(catch_res)
 catch_res[, dimnames(catch_res)$year <= 2017] <- 1
 
 if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+### ------------------------------------------------------------------------ ###
+### SAM shortcut - retro ####
+### ------------------------------------------------------------------------ ###
+### assessment estimate error
+### based on retro analysis
+
+retro <- retro(fit = fit, year = 10)
+
+ssb_table <- function(x) {
+  tmp <- data.frame(SSB = ssbtable(x)[, "Estimate"])
+  tmp$year <- as.numeric(rownames(tmp))
+  rownames(tmp) <- NULL
+  tmp$assessment <- max(tmp$year)
+  return(tmp)
+}
+retro_SSB <- lapply(retro, ssb_table)
+retro_SSB <- do.call(rbind, retro_SSB)
+
+### plot SSB retro
+df <- rbind(retro_SSB, ssb_table(fit))
+p <- df %>% filter(assessment < 2018) %>%
+  ggplot(aes(x = year, y = SSB/1000, colour = as.factor(assessment))) +
+  geom_line(data = df %>% filter(assessment == 2018),
+          colour = "black") +
+  geom_line(show.legend = FALSE, size = 0.2) +
+  theme_bw(base_size = 8) +
+  coord_cartesian(ylim = c(0, NA)) +
+  labs(x = "year", y = "SSB [1000 t]")
+p
+ggsave(filename = "output/cod2018_retro.png", 
+       width = 8.5, height = 4, units = "cm", dpi = 600, type = "cairo")
+p + xlim(c(2000, NA)) + ylim(c(0, 150))
+ggsave(filename = "output/cod2018_retro_zoom.png", 
+       width = 8.5, height = 4, units = "cm", dpi = 600, type = "cairo")
+
+### SSB error
+SSB_error <- retro_SSB %>%
+  filter(year == assessment) %>%
+  mutate(SSB_retro = SSB, 
+         SSB = NULL, 
+         assessment = NULL) %>%
+  left_join(ssb_table(fit) %>% 
+              mutate(assessment = NULL)) %>%
+  mutate(SSB_ratio = SSB_retro/SSB)
+sd(SSB_error$SSB_ratio)
+### plot
+trans_from <- function(from = 1) {
+  trans <- function(x) x - from
+  inv <- function(x) x + from
+  trans_new("from", trans, inv, 
+            domain = c(from, Inf))
+}
+p_SSB_error <- SSB_error %>%
+  select(year, SSB_ratio) %>%
+  ggplot(aes(x = year, y = SSB_ratio)) +
+  geom_col(fill = "darkgrey", colour = "darkgrey") +
+  theme_bw(base_size = 8) +
+  labs(x = "year", y = "terminal SSB / SSB") +
+  geom_hline(yintercept = 1) +
+  scale_y_continuous(trans = trans_from(), 
+                     limits = c(NA, NA)) +
+  scale_x_continuous(breaks = c(2008, 2010, 2012, 2014, 2016, 2018))
+p_SSB_error
+ggsave(filename = "output/cod2018_retro_res.png", 
+       width = 8.5, height = 4, units = "cm", dpi = 600, type = "cairo")
+
+### auto-correlation
+SSB_err_acf <- acf(SSB_error$SSB_ratio)
+c(SSB_err_acf$acf)[2]
+### plot
+p_acf <- data.frame(acf = SSB_err_acf$acf, lag = seq(SSB_err_acf$n.used) - 1) %>%
+  ggplot(aes(x = lag, y = acf)) +
+  geom_col(fill = "darkgrey", colour = "darkgrey") +
+  theme_bw(base_size = 8) +
+  labs(x = "lag", y = "auto-correlation") +
+  geom_hline(yintercept = 0) +
+  scale_x_continuous(breaks = c(0:9))
+p_acf
+ggsave(filename = "output/cod2018_retro_acf.png", 
+       width = 8.5, height = 4, units = "cm", dpi = 600, type = "cairo")
+
+### create auto-correlated SSB error
+set.seed(3)
+ssb_res <- rlnoise(n, ssb(stk_fwd) %=% 0, sd = sd(SSB_error$SSB_ratio), 
+                   b = c(SSB_err_acf$acf)[2])
+### replicate SSB error into age structure
+n_res <- stock.n(stk_fwd) %=% NA_real_
+n_res[] <- rep(c(ssb_res), each = 6)
+
+if (isTRUE(verbose)) plot(ssb_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+# library(plyr)
+# error <- lapply(stks_retro, function(x) {
+#   yr <- dimnames(x)$year[dims(x)$year]
+#   c(F = c(fbar(x)[, yr]/fbar(stk_comp)[, yr]),
+#     #CR = c((catch(x)[, yr]/stock(x)[, yr])/(catch(stk)[, yr]/stock(stk)[, yr])),
+#     #SSB = summary(x)[ac(yr), "SSB"]/summary(fit)[ac(yr), "SSB"]
+#     SSB = c(ssb(x)[, yr]/ssb(stk_comp)[, yr])
+#     )
+# })
+# error <- do.call(rbind, error)
+# set.seed(1)
+# dt2 <- as.data.frame(rmvnorm(n, c(1, 1), cov(error)))
+
+### ------------------------------------------------------------------------ ###
+### SAM shortcut - OM vs. SAM estimate ####
+### ------------------------------------------------------------------------ ###
+
+### use last SSB estimate from SAM (year 2018)
+### compare estimate to OM
+# ssb_error <- summary(fit)["2018", "SSB"]/ssb(stk_fwd)[, ac(2018)]
+# fbar_error <- summary(fit)["2018", "Fbar(2-4)"]/fbar(stk_fwd)[, ac(2018)]
+# 
+# hist(ssb_error, breaks = 10)
+# 
+# ssb_res <- catch.n(stk_fwd) %=% 0
+# ssb_res[] <- ssb_error
+# fbar_res <- catch.n(stk_fwd) %=% 0
+# fbar_res[] <- fbar_error
+# 
+# if (isTRUE(verbose)) plot(ssb_res[1, ], probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+### ------------------------------------------------------------------------ ###
+### SAM shortcut - retrospective (with forecast) ####
+### ------------------------------------------------------------------------ ###
+
+# ### template for keeping residuals
+# ssb_res <- fbar_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
+# res_yrs <- dims(ssb_res)$year
+# res_iter <- dims(ssb_res)$iter
+# res_ages <- dims(ssb_res)$age
+# 
+# ### get historical values from ICES advice sheets
+# adv <- read.csv("cod_forecasts.csv", as.is = TRUE)
+# adv_retro <- adv %>% filter(advice_year %in% c(2015:2019))
+# 
+# ### get 2020 SAM assessment
+# fit2020 <- fitfromweb(nscod20_ass02)
+# summary(fit2020)
+# 
+# ### compare values
+# adv_retro$SSB_2020 <- ssbtable(fit2020)[ac(2020:2016), "Estimate"]
+# adv_retro$F_2020 <- fbartable(fit2020)[ac(2020:2016), "Estimate"]
+# adv_retro <- adv_retro %>%
+#   mutate(SSB_ratio = SSB/SSB_2020,
+#          F_ratio = F/F_2020)
+# 
+# ### plot
+# df <- bind_rows(
+#   adv_retro %>%
+#     select(year = advice_year, SSB, F) %>%
+#     mutate(source = "forecast") %>%
+#     pivot_longer(c(SSB, F)),
+#   adv_retro %>%
+#     select(year = advice_year, SSB_2020, F_2020) %>%
+#     mutate(source = "SAM 2020") %>%
+#     mutate(SSB = SSB_2020, F = F_2020, SSB_2020 = NULL, F_2020 = NULL) %>%
+#     pivot_longer(c(SSB, F))
+# )
+# ggplot() +
+#   geom_point(data = df %>% filter(source == "forecast"),
+#              aes(x = year, y = value, alpha = source)) +
+#   geom_line(data = df %>% filter(source == "SAM 2020"),
+#              aes(x = year, y = value, colour = source), show.legend = TRUE) +
+#   scale_colour_manual("", values = c(forecast = "black", "SAM 2020" = "black")) +
+#   scale_alpha_manual("", values = c(forecast = 1, "SAM 2020" = 1)) +
+#   facet_wrap(~ name, scales = "free_y") +
+#   theme_bw(base_size = 8) +
+#   labs(x = "year", y = "") +
+#   ylim(c(0, NA))
+# 
+# 
+# 
+# 
+# ### calculate kernel density of residuals
+# dens_ssb <- density(x = adv_retro$SSB_ratio, from = 0)
+# plot(dens_ssb)
+# dens_fbar <- density(x = adv_retro$F_ratio, from = 0)
+# plot(dens_fbar)
+# ### sample residuals
+# set.seed(8)
+# mu_ssb <- sample(x = adv_retro$SSB_ratio, size = res_yrs * res_iter, 
+#                  replace = TRUE)
+# mu_fbar <- sample(x = adv_retro$F_ratio, size = res_yrs * res_iter, 
+#                  replace = TRUE)
+# ### "smooth", i.e. sample from density distribution
+# res_ssb_insert <- rnorm(n = res_yrs * res_iter, mean = mu_ssb, 
+#                         sd = dens_ssb$bw)
+# res_fbar_insert <- rnorm(n = res_yrs * res_iter, mean = mu_fbar, 
+#                         sd = dens_fbar$bw)
+# ### insert into templates
+# ssb_res[] <- rep(res_ssb_insert, each = res_ages)
+# fbar_res[] <- rep(res_fbar_insert, each = res_ages)
+# 
+# plot(ssb_res[1, ])
+# plot(fbar_res[1, ])
+
+### ------------------------------------------------------------------------ ###
+### SAM shortcut - arbitrary lognormal error ####
+### ------------------------------------------------------------------------ ###
+
+# ### template for keeping residuals
+# n_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
+# res_yrs <- dims(n_res)$year
+# res_iter <- dims(n_res)$iter
+# res_ages <- dims(n_res)$age
+# 
+# ### arbitrary uncertainty, no bias
+# set.seed(3)
+# n_res[] <- stats::rnorm(n = length(n_res), mean = 0,
+#                             sd = 0.3)
+# ### exponentiate to get log-normal
+# n_res <- exp(n_res)
+
+
 
 ### ------------------------------------------------------------------------ ###
 ### check SAM ####
@@ -606,6 +823,9 @@ saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
 ### catch numbers
 saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
+### stock.n residuals from retro
+saveRDS(n_res, file = paste0(input_path, "n_res.rds"))
+### full image
 save.image(file = paste0(input_path, "image.RData"))
 
 # stk_fwd <- readRDS(file = paste0(input_path, "stk.rds"))
@@ -663,51 +883,46 @@ om <- FLom(stock = stk_fwd, ### stock
 
 ### observation (error) model
 oem <- FLoem(method = oem_WKNSMSE,
-             observations = list(stk = stk_oem, idx = idx), 
-             deviances = list(stk = FLQuants(catch.dev = catch_res), 
-                              idx = idx_dev),
-             args = list(idx_timing = c(0, -1),
-                         catch_timing = -1,
-                         use_catch_residuals = TRUE, 
-                         use_idx_residuals = TRUE,
-                         use_stk_oem = TRUE))
+             observations = list(stk = stk_oem), 
+             deviances = list(stk = FLQuants(catch.n = catch_res,
+                                             stock.n = n_res)),
+             args = list(catch_timing = -1,
+                         stk_timing = 0,
+                         use_catch_residuals = TRUE,
+                         use_stk_oem = TRUE,
+                         shortcut = TRUE,
+                         use_n_error = TRUE))
 ### implementation error model (banking and borrowing)
 # iem <- FLiem(method = iem_WKNSMSE, 
 #              args = list(BB = TRUE))
 
 ### default management
 ctrl_obj <- mpCtrl(list(
-  est = mseCtrl(method = SAM_wrapper,
-                     args = c(### short term forecast specifications
-                       forecast = TRUE, 
-                       fwd_trgt = "fsq", fwd_yrs = 1, 
-                       cod4_stf_def,
-                       ### speeding SAM up
-                       newtonsteps = 0, rel.tol = 0.001,
-                       par_ini = list(sam_initial),
-                       track_ini = TRUE, ### store ini for next year
-                       ### SAM model specifications
-                       conf = list(cod4_conf_sam_no_mult),
-                       parallel = FALSE ### TESTING ONLY
-                     )),
+  est = mseCtrl(method = est_SAM_shortcut,
+                args = c(### short term forecast specifications
+                         forecast = TRUE, 
+                         fwd_trgt = "fsq", fwd_yrs = 1, 
+                         cod4_stf_def
+               )),
   phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
   hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  isys = mseCtrl(method = is_WKNSMSE, 
-                    args = c(hcrpars = list(refpts_mse),
-                             ### for short term forecast
-                             fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
-                             cod4_stf_def#,
-                             ### TAC constraint
-                             #TAC_constraint = TRUE,
-                             #lower = -Inf, upper = Inf,
-                             #Btrigger_cond = FALSE,
-                             ### banking and borrowing 
-                             #BB = TRUE,
-                             #BB_check_hcr = FALSE,
-                             #BB_check_fc = TRUE,
-                             #BB_rho = list(c(-0.1, 0.1))
-                    ))#,
+  isys = mseCtrl(method = is_WKNSMSE,
+                 args = c(hcrpars = list(refpts_mse),
+                          ### for short term forecast
+                          fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
+                          cod4_stf_def,
+                          shortcut = TRUE
+                          ### TAC constraint
+                          #TAC_constraint = TRUE,
+                          #lower = -Inf, upper = Inf,
+                          #Btrigger_cond = FALSE,
+                          ### banking and borrowing
+                          #BB = TRUE,
+                          #BB_check_hcr = FALSE,
+                          #BB_check_fc = TRUE,
+                          #BB_rho = list(c(-0.1, 0.1))
+                   ))#,
   #tm = NULL
 ))
 ### additional tracking metrics
@@ -735,8 +950,9 @@ saveRDS(object = input,
 #            args = input$args,
 #            tracking = input$tracking)
 
-debugonce(mp)
-debugonce(goFish)
+#debugonce(mp)
+#debugonce(goFish)
+#res1 <- do.call(goFish, input)
 res1 <- mp(om = input$om,
            oem = input$oem,
            #iem = iem,
