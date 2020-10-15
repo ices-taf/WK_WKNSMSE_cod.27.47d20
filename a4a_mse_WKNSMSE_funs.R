@@ -100,11 +100,15 @@ oem_WKNSMSE <- function(stk,
                         args, 
                         tracking, 
                         catch_timing = -1, ### catch timing relative to ay
+                        stk_timing = 0,
                         idx_timing = -1, ### index timing relative to ay
                         use_catch_residuals = FALSE, ### use residuals for
                         use_idx_residuals = FALSE,   ### observations
                         use_stk_oem = FALSE, ### biological parameters, wts etc
                         dd_M = NULL,
+                        shortcut = FALSE,
+                        use_n_error = FALSE,
+                        use_harvest_error = FALSE,
                         ...) {
   #browser()
   ### current (assessment) year
@@ -119,7 +123,7 @@ oem_WKNSMSE <- function(stk,
   }
   
   ### create object for observed stock
-  if (!isTRUE(use_stk_oem)) {
+  if (isFALSE(use_stk_oem)) {
   
     ### use OM as template
     stk0 <- stk
@@ -142,7 +146,7 @@ oem_WKNSMSE <- function(stk,
   if (isTRUE(use_catch_residuals)) {
     
     ### implement for catch at age
-    catch.n(stk0) <- catch.n(stk) * deviances$stk$catch.dev
+    catch.n(stk0) <- catch.n(stk) * deviances$stk$catch.n
     
     ### split catch into discards and landings, based on landing fraction
     landings.n(stk0) <- catch.n(stk0) * (landings.n(stk) / catch.n(stk))
@@ -155,63 +159,94 @@ oem_WKNSMSE <- function(stk,
     
   }
   
-  ### cut off years
-  ### workaround for NS cod: survey until intermediate year, but catch stops
-  ### 1 year earlier
-  ### slots such as natural mortality, maturity need to be kept, otherwise
-  ### SAM will fall over
-  if (any(idx_timing > catch_timing)) {
+  if (!isTRUE(shortcut)) {
+    ### cut off years
+    ### workaround for NS cod: survey until intermediate year, but catch stops
+    ### 1 year earlier
+    ### slots such as natural mortality, maturity need to be kept, otherwise
+    ### SAM will fall over
+    if (any(idx_timing > catch_timing)) {
+      
+      ### keep stock until last survey data year
+      stk0 <- window(stk0, end = ay + max(idx_timing))
+      ### find years to remove
+      yrs_remove <- (ay + catch_timing + 1):ay
+      ### remove catch data
+      catch(stk0)[, ac(yrs_remove)] <- NA
+      catch.n(stk0)[, ac(yrs_remove)] <- NA
+      catch.wt(stk0)[, ac(yrs_remove)] <- NA
+      landings(stk0)[, ac(yrs_remove)] <- NA
+      landings.n(stk0)[, ac(yrs_remove)] <- NA
+      landings.wt(stk0)[, ac(yrs_remove)] <- NA
+      discards(stk0)[, ac(yrs_remove)] <- NA
+      discards.n(stk0)[, ac(yrs_remove)] <- NA
+      discards.wt(stk0)[, ac(yrs_remove)] <- NA
+      
+    } else {
+      
+      stk0 <- window(stk0, end = ay + catch_timing)
+      
+    }
     
-    ### keep stock until last survey data year
-    stk0 <- window(stk0, end = ay + max(idx_timing))
-    ### find years to remove
-    yrs_remove <- (ay + catch_timing + 1):ay
-    ### remove catch data
-    catch(stk0)[, ac(yrs_remove)] <- NA
-    catch.n(stk0)[, ac(yrs_remove)] <- NA
-    catch.wt(stk0)[, ac(yrs_remove)] <- NA
-    landings(stk0)[, ac(yrs_remove)] <- NA
-    landings.n(stk0)[, ac(yrs_remove)] <- NA
-    landings.wt(stk0)[, ac(yrs_remove)] <- NA
-    discards(stk0)[, ac(yrs_remove)] <- NA
-    discards.n(stk0)[, ac(yrs_remove)] <- NA
-    discards.wt(stk0)[, ac(yrs_remove)] <- NA
+    ### calculate index values
+    observations$idx <- calc_survey(stk = stk, idx = observations$idx)
     
+    ### observed survey
+    idx0 <- observations$idx 
+    
+    ### add uncertainty to observed indices
+    if (isTRUE(use_idx_residuals)) {
+      
+      idx0 <- lapply(seq_along(idx0), function(idx_i) {
+        idx_tmp <- idx0[[idx_i]]
+        index(idx_tmp) <- index(idx_tmp) * deviances$idx[[idx_i]]
+        return(idx_tmp)
+      })
+      
+    }
+    
+    ### timing of survey
+    ### 0: intermediate/assessment year
+    ### <0: fewer years available & vice versa
+    if (length(idx_timing) < length(idx0)) { 
+      idx_timing <- rep(idx_timing, length(idx0))
+    }
+    ### restrict years for indices based on timing
+    idx0 <- lapply(seq_along(idx0), function(x) {
+      window(idx0[[x]], end = ay + idx_timing[x])
+    })
+    idx0 <- FLIndices(idx0) ### restore class
+    names(idx0) <- names(observations$idx)
+  
   } else {
     
-    stk0 <- window(stk0, end = ay + catch_timing)
+    ### no indices
+    observations$idx <- NULL
+    idx0 <- NULL
+    ### get stock estimates
+    stock.n(stk0) <- stock.n(stk)
+    stock(stk0) <- computeStock(stk0)
+    harvest(stk0) <- computeHarvest(stk0)
+    ### bug in computeHarvest -> correct iter names
+    dimnames(harvest(stk0))$iter <- dimnames(stk0)$iter
+    ### remove catch observations
+    yrs_remove <- (ay + catch_timing + 1):ay
+    catch.n(stk0)[, ac(yrs_remove)] <- NA
+    catch(stk0)[, ac(yrs_remove)] <- NA
+    ### add uncertainty to SSB / Fbar
+    if (isTRUE(use_n_error)) {
+      stock.n(stk0) <- stock.n(stk0) * 
+        deviances$stk$stock.n[, ac(dimnames(stk0)$year)]
+      stock(stk0) <- computeStock(stk0)
+    }
+    if (isTRUE(use_harvest_error)) {
+      harvest(stk0) <- harvest(stk0) * 
+        deviances$stk$harvest[, ac(dimnames(stk0)$year)]
+    }
+    ### cut off non-observed years
+    stk0 <- window(stk0, end = ay + stk_timing)
     
   }
-  
-  ### calculate index values
-  observations$idx <- calc_survey(stk = stk, idx = observations$idx)
-  
-  ### observed survey
-  idx0 <- observations$idx 
-  
-  ### add uncertainty to observed indices
-  if (isTRUE(use_idx_residuals)) {
-    
-    idx0 <- lapply(seq_along(idx0), function(idx_i) {
-      idx_tmp <- idx0[[idx_i]]
-      index(idx_tmp) <- index(idx_tmp) * deviances$idx[[idx_i]]
-      return(idx_tmp)
-    })
-    
-  }
-  
-  ### timing of survey
-  ### 0: intermediate/assessment year
-  ### <0: fewer years available & vice versa
-  if (length(idx_timing) < length(idx0)) { 
-    idx_timing <- rep(idx_timing, length(idx0))
-  }
-  ### restrict years for indices based on timing
-  idx0 <- lapply(seq_along(idx0), function(x) {
-    window(idx0[[x]], end = ay + idx_timing[x])
-  })
-  idx0 <- FLIndices(idx0) ### restore class
-  names(idx0) <- names(observations$idx)
   
   ### return observations
   return(list(stk = stk0, idx = idx0, observations = observations, 
@@ -424,6 +459,111 @@ SAM_wrapper <- function(stk, idx, tracking,
   
 }
 
+
+### ------------------------------------------------------------------------ ###
+### stock assessment: SAM approximation ####
+### ------------------------------------------------------------------------ ###
+est_SAM_shortcut <- function(stk, idx, tracking,
+                        args, ### contains ay (assessment year)
+                        forecast = FALSE,
+                        fwd_trgt = "fsq", ### what to target in forecast
+                        fwd_yrs = 1, ### number of years to add
+                        fwd_yrs_average = -3:0, ### years used for averages
+                        fwd_yrs_rec_start = NULL, ### recruitment 
+                        fwd_yrs_sel = -3:-1, ### selectivity
+                        fwd_yrs_lf_remove = -2:-1,
+                        fwd_splitLD = TRUE,
+                        ...){
+  
+  ### get additional arguments
+  args <- c(args, list(...))
+  
+  ### get current (assessment) year
+  ay <- args$ay
+  
+  ### no assessment
+  stk0 <- stk
+  
+  ### perform forecast to get SSB ay+1
+  if (isTRUE(forecast)) {
+    
+    ### check how to do forecast
+    ### currently, can only do F status quo
+    if (!all(fwd_trgt %in% c("fsq","TAC"))) {
+      stop("only fsq and TAC supported in forecast")
+    }
+    
+    ### years for average values
+    ave.years <- range(stk0)[["maxyear"]] + fwd_yrs_average
+    ### years for sampling of recruitment years
+    rec.years <- seq(from = fwd_yrs_rec_start, to = range(stk0)[["maxyear"]] - 1)
+    ### years for selectivity
+    sel.years <- range(stk0)[["maxyear"]] + fwd_yrs_sel
+    ### last year
+    lst_yr <- range(stk0)[["maxyear"]]
+    
+    ### extend stk0
+    stk0_stf <- stf(stk0, nyears = fwd_yrs)
+    ### apply averages as defined above
+    fc_yrs <- seq(from = lst_yr + 1, length.out = fwd_yrs)
+    catch.wt(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(catch.wt(stk0)[, ac(ave.years)], c(1, 6), mean)
+    landings.wt(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(landings.wt(stk0)[, ac(ave.years)], c(1, 6), mean)
+    discards.wt(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(discards.wt(stk0)[, ac(ave.years)], c(1, 6), mean)
+    catch.wt(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(catch.wt(stk0)[, ac(ave.years)], c(1, 6), mean)
+    m(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(m(stk0)[, ac(ave.years)], c(1, 6), mean)
+    mat(stk0_stf)[, ac(fc_yrs)] <- 
+      apply(mat(stk0)[, ac(ave.years)], c(1, 6), mean)
+    harvest(stk0_stf)[, ac(sel.years)] <- 
+      apply(harvest(stk0)[, ac(sel.years)], c(1, 3:6), mean, na.rm = TRUE)
+    ### recruitment: median to mimick average of SAM resampling
+    rec_fc <- apply(rec(stk0)[, ac(rec.years)], 6, median, na.rm = TRUE)
+    
+    ### modify fwd_yrs in case last data year does not include catch
+    if (all(is.na(catch(stk0)[, ac(lst_yr)]))) fwd_yrs <- fwd_yrs + 1
+    
+    ### forecast years
+    yrs <- seq(to = dims(stk0_stf)$maxyear, length.out = fwd_yrs)
+    
+    ### get recent TAC
+    if (args$iy == ay) {
+      ### in first year of simulation, use value from OM saved earlier in ay
+      TAC_last <- tracking["C.om", ac(ay)]
+    } else {
+      ### in following years, use TAC advised the year before
+      TAC_last <- tracking["metric.is", ac(ay - 1)]
+    }
+    ### get Fsq
+    Fsq <- fbar(stk0)[, ac(ay - 1)]
+    
+    ### template for forecast targets
+    if (identical(fwd_trgt, "fsq")) {
+      ctrl <- getCtrl(values = Fsq, quantity = "f", years = yrs, 
+                      it = dims(stk0)$iter)
+    } else if (identical(fwd_trgt, "TAC")) {
+      ctrl <- getCtrl(values = TAC_last, quantity = "catch", years = yrs, 
+                      it = dims(stk0)$iter)
+    }
+    
+    ### stf
+    stk0_stf[] <- fwd(object = stk0_stf, control = ctrl,
+                      sr = list(model = "mean",
+                                params = FLPar(c(rec_fc),
+                                               iter = dims(stk0)$iter)),
+                      maxF = 5)
+    
+  }
+
+  ### return assessed stock, tracking
+  ### (model fit required later for TAC calculation)
+  return(list(stk = stk0_stf, tracking = tracking))
+  
+}
+
 ### ------------------------------------------------------------------------ ###
 ### phcr: parameterize HCR ####
 ### ------------------------------------------------------------------------ ###
@@ -570,6 +710,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
                        BB_rho, ### definition of BB
                        ### reference points
                        hcrpars = list(),
+                       shortcut = FALSE, ### mimick SAM forecast with FLash
                        ...) {
   
   ### get current (assessment) year
@@ -577,15 +718,19 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### number of iterations
   it <- dim(stk)[6]
   
-  ### retrieve SAM model fit (list)
-  fit <- attr(stk, "fit")
+  if (!isTRUE(shortcut)) {
   
-  ### check class of model fit(s)
-  if (!class(fit) %in% c("sam", "sam_list")) 
-    stop("attr(stk0, \"fit\") has to be class sam or sam_list")
-  
-  ### if single fit, turn into list
-  if (is(fit, "sam")) fit <- list(fit)
+    ### retrieve SAM model fit (list)
+    fit <- attr(stk, "fit")
+    
+    ### check class of model fit(s)
+    if (!class(fit) %in% c("sam", "sam_list")) 
+      stop("attr(stk0, \"fit\") has to be class sam or sam_list")
+    
+    ### if single fit, turn into list
+    if (is(fit, "sam")) fit <- list(fit)
+    
+  }
   
   ### if conditional banking & borrowing applied, extend forecast for one more
   ### year to check SSB in year after advice year
@@ -607,63 +752,83 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     TAC_last <- tracking["metric.is", ac(ay - 1)]
   }
   
-  ### go through all model fits
-  fc <- foreach(fit_i = fit, iter_i = seq_along(fit), 
-                .errorhandling = "pass") %do% {
-                  
-    ### overwrite landing fraction with last year, if requested
-    if (!is.null(fwd_yrs_lf_remove)) {
-      ### index for years to remove/overwrite
-      idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
-      ### overwrite
-      fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
+  if (!isTRUE(shortcut)) {
+    
+    ### go through all model fits
+    fc <- foreach(fit_i = fit, iter_i = seq_along(fit), 
+                  .errorhandling = "pass") %do% {
+                    
+      ### overwrite landing fraction with last year, if requested
+      if (!is.null(fwd_yrs_lf_remove)) {
+        ### index for years to remove/overwrite
+        idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
+        ### overwrite
+        fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
+      }
+      
+      ### check how to do forecast
+      ### can handle F status quo, F target from ctrl object and TAC
+      ### scaled F
+      fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
+      ### target F values
+      fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA)
+      ### target catch values
+      catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
+      
+      ### years for average values
+      ave.years <- max(fit_i$data$years) + fwd_yrs_average
+      ### years for sampling of recruitment years
+      if (is.null(fwd_yrs_rec_start)) {
+        rec.years <- fit_i$data$years ### use all years, if not defined
+      } else {
+        rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
+      }
+      
+      ### years where selectivity is not used for mean in forecast
+      overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
+      
+      ### forecast 
+      fc_i <- stockassessment::forecast(fit = fit_i, 
+                                        fscale = fscale, 
+                                        fval = fval, 
+                                        catchval = catchval,
+                                        ave.years = ave.years,
+                                        rec.years = rec.years,
+                                        overwriteSelYears = overwriteSelYears,
+                                        splitLD = fwd_splitLD)
+      
+      ### return forecast table
+      return(attr(fc_i, "tab"))
+      
     }
+    ### if forecast fails, error message returned
+    ### replace error message with NA
+    ### extract catch target
+    catch_target <- sapply(fc, function(x) {
+      if (is(x, "error")) {
+        return(NA)
+      } else {
+        return(x[ac(ay + 1), "catch:median"])
+      }
+    })
     
-    ### check how to do forecast
-    ### can handle F status quo, F target from ctrl object and TAC
-    ### scaled F
-    fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
-    ### target F values
-    fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA)
-    ### target catch values
-    catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
+  } else {
+    ### FLash forecast
+    ### contains already correct years from est_SAM_shortcut()
+    stk0_stf <- stk
     
-    ### years for average values
-    ave.years <- max(fit_i$data$years) + fwd_yrs_average
-    ### years for sampling of recruitment years
-    if (is.null(fwd_yrs_rec_start)) {
-      rec.years <- fit_i$data$years ### use all years, if not defined
-    } else {
-      rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
-    }
+    ### recruitment (value previously calculated)
+    rec_fc <- rec(stk0_stf)[, ac(ctrl@target$year)]
     
-    ### years where selectivity is not used for mean in forecast
-    overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
+    ### stf
+    stk0_stf[] <- fwd(object = stk0_stf, control = ctrl, 
+                      sr = list(model = "mean", params = FLPar(c(rec_fc))),
+                      maxF = 5)
     
-    ### forecast 
-    fc_i <- stockassessment::forecast(fit = fit_i, 
-                                      fscale = fscale, 
-                                      fval = fval, 
-                                      catchval = catchval,
-                                      ave.years = ave.years,
-                                      rec.years = rec.years,
-                                      overwriteSelYears = overwriteSelYears,
-                                      splitLD = fwd_splitLD)
-    
-    ### return forecast table
-    return(attr(fc_i, "tab"))
+    ### catch target:
+    catch_target <- c(catch(stk0_stf)[, ac(ctrl@target$year)])
     
   }
-  ### if forecast fails, error message returned
-  ### replace error message with NA
-  ### extract catch target
-  catch_target <- sapply(fc, function(x) {
-    if (is(x, "error")) {
-      return(NA)
-    } else {
-      return(x[ac(ay + 1), "catch:median"])
-    }
-  })
   
   ### get reference points
   hcrpars <- hcrpars[!sapply(hcrpars, is.null)]
