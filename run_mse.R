@@ -40,15 +40,17 @@ if (length(args) > 0) {
 
 ### load packages
 library(FLfse)
-library(stockassessment)
+#library(stockassessment)
 library(ggplotFL)
-library(FLAssess)
+#library(FLAssess)
 library(mse)
 ### load files from package mse for easier debugging
 #devtools::load_all("../mse/")
 library(FLash)
 library(tidyr)
 library(dplyr)
+library(foreach)
+library(doRNG)
 
 ### load additional functions
 source("a4a_mse_WKNSMSE_funs.R")
@@ -81,14 +83,13 @@ if (par_env == 1) {
   library(mse)
   library(FLash)
   library(FLfse)
-  library(stockassessment)
+  #library(stockassessment)
   library(foreach)
   library(doRNG)
   source("a4a_mse_WKNSMSE_funs.R")
 }
 
 ### set random seed for reproducibility
-library(doRNG)
 registerDoRNG(123)
 
 ### ------------------------------------------------------------------------ ###
