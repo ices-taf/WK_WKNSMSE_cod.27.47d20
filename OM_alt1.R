@@ -25,6 +25,7 @@ library(FLash)
 library(tidyr)
 library(dplyr)
 library(doParallel)
+library(scales)
 
 source("a4a_mse_WKNSMSE_funs.R")
 
@@ -154,6 +155,7 @@ stock.n(stk)[] <- uncertainty$stock.n
 stock(stk)[] <- computeStock(stk)
 ### add noise to F
 harvest(stk)[] <- uncertainty$harvest
+
 ### add noise to catch numbers
 catch.n(stk)[, dimnames(stk)$year[-dims(stk)$year]] <- uncertainty$catch_n
 catch(stk) <- computeCatch(stk)
@@ -167,11 +169,9 @@ max(harvest(stk))
 # 2.086832 in year 2001 for age 6 (plusgroup)
 
 ### get estimated catch numbers
-catch_n <- uncertainty$cach_n
+catch_n <- uncertainty$catch_n
 catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
   catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
-
-
 
 ### ------------------------------------------------------------------------ ###
 ### extend stock for MSE simulation ####
@@ -490,7 +490,7 @@ stock.n(stk_oem)[] <- stock(stk_oem)[] <- harvest(stk_oem)[] <- NA
 
 
 ### ------------------------------------------------------------------------ ###
-### indices ####
+### indices - not used in shortcut approach ####
 ### ------------------------------------------------------------------------ ###
 ### use real FLIndices object as template (included in FLfse)
 idx <- cod4_idx
@@ -501,10 +501,10 @@ idx <- lapply(idx, propagate, n)
 
 ### insert catchability
 for (idx_i in seq_along(idx)) {
-  
+
   ### set catchability for projection
   index.q(idx[[idx_i]])[] <- uncertainty$survey_catchability[[idx_i]]
-  
+
 }
 ### create copy of index with original values
 idx_raw <- lapply(idx ,index)
@@ -526,21 +526,21 @@ for (idx_i in seq_along(idx_dev)) {
   idx_dev[[idx_i]] <- exp(idx_dev[[idx_i]])
 }
 
-### modify residuals for historical period so that index values passed to 
+### modify residuals for historical period so that index values passed to
 ### stock assessment are the ones observed in reality
 ### IBTS Q1, values up to 2018
-idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <- 
+idx_dev$IBTS_Q1_gam[, dimnames(idx_dev$IBTS_Q1_gam)$year <= 2018] <-
   idx_raw$IBTS_Q1_gam[, dimnames(idx_raw$IBTS_Q1_gam)$year <= 2018] /
   index(idx$IBTS_Q1_gam)[, dimnames(idx$IBTS_Q1_gam@index)$year <= 2018]
 ### IBTS Q3, values up to 2017
-idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <- 
+idx_dev$IBTS_Q3_gam[, dimnames(idx_dev$IBTS_Q3_gam)$year <= 2017] <-
   idx_raw$IBTS_Q3_gam[, dimnames(idx_raw$IBTS_Q3_gam)$year <= 2017] /
   index(idx$IBTS_Q3_gam)[, dimnames(idx$IBTS_Q3_gam@index)$year <= 2017]
 
 if (isTRUE(verbose)) {
 
   ### compare simulated to original survey(s)
-  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam), 
+  as.data.frame(FLQuants(cod4_q1 = index(cod4_idx$IBTS_Q1_gam),
                          cod4_q3 = index(cod4_idx$IBTS_Q3_gam),
                          sim_q1 = (index(idx$IBTS_Q1_gam)),
                          sim_q3 = (index(idx$IBTS_Q3_gam))
@@ -578,10 +578,10 @@ if (isTRUE(verbose)) {
 ### create noise for catch
 set.seed(5)
 catch_res <- catch.n(stk_fwd) %=% 0 ### template FLQuant
-catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0, 
+catch_res[] <- stats::rnorm(n = length(catch_res), mean = 0,
                             sd = uncertainty$catch_sd)
 ### the catch_res values are on a normale scale,
-### exponentiate to get log-normal 
+### exponentiate to get log-normal
 catch_res <- exp(catch_res)
 ### catch_res is a factor by which the numbers at age are multiplied
 
@@ -589,28 +589,16 @@ catch_res <- exp(catch_res)
 ### -> calculate residuals
 catch_res[, dimnames(catch_res)$year <= 2017] <- 
   window(catch.n(stk_orig), end = 2017) / window(catch.n(stk_fwd), end = 2017)
-#plot(catch.n(stk_fwd) * catch_res)
 
 if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 ### ------------------------------------------------------------------------ ###
-### check SAM ####
+### SAM shortcut - retro ####
 ### ------------------------------------------------------------------------ ###
-# 
-# stk_tmp <- window(stk_stf, end = 2018)
-# catch.wt(stk_tmp)[,ac(2018)] <- landings.wt(stk_tmp)[,ac(2018)] <-
-#   discards.wt(stk_tmp)[,ac(2018)] <- NA
-# stk_tmp <- stk_tmp[,,,,, 1:10]
-# idx_tmp <- window(idx, end = 2018)
-# idx_tmp[[2]] <- window(idx_tmp[[2]], end = 2017)
-# idx_tmp <- lapply(idx_tmp, FLCore::iter, 1:10)
-# 
-# fit3 <- FLR_SAM(stk = stk_tmp, 
-#                idx = idx_tmp, conf = cod4_conf_sam)
-# stk3 <- SAM2FLStock(fit3)
-# plot(iter(FLStocks(cod4 = stk, sim = stk3), 1))
-# 
-# 
+
+### take residuals from baseline OM
+n_res <- readRDS(paste0("input/cod4/", n, "_", n_years, "/n_res.rds"))
+
 
 ### ------------------------------------------------------------------------ ###
 ### save OM ####
@@ -640,6 +628,9 @@ saveRDS(sam_initial, file = paste0(input_path, "sam_initial.rds"))
 saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"))
 ### catch numbers
 saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
+### stock.n residuals from retro
+saveRDS(n_res, file = paste0(input_path, "n_res.rds"))
+### full image
 save.image(file = paste0(input_path, "image.RData"))
 
 # stk_fwd <- readRDS(file = paste0(input_path, "stk.rds"))
@@ -697,52 +688,47 @@ om <- FLom(stock = stk_fwd, ### stock
 
 ### observation (error) model
 oem <- FLoem(method = oem_WKNSMSE,
-             observations = list(stk = stk_oem, idx = idx), 
-             deviances = list(stk = FLQuants(catch.dev = catch_res), 
-                              idx = idx_dev),
-             args = list(idx_timing = c(0, -1),
-                         catch_timing = -1,
-                         use_catch_residuals = TRUE, 
-                         use_idx_residuals = TRUE,
-                         use_stk_oem = TRUE))
+             observations = list(stk = stk_oem), 
+             deviances = list(stk = FLQuants(catch.n = catch_res,
+                                             stock.n = n_res)),
+             args = list(catch_timing = -1,
+                         stk_timing = 0,
+                         use_catch_residuals = TRUE,
+                         use_stk_oem = TRUE,
+                         shortcut = TRUE,
+                         use_n_error = TRUE))
 ### implementation error model (banking and borrowing)
 # iem <- FLiem(method = iem_WKNSMSE, 
 #              args = list(BB = TRUE))
 
 ### default management
 ctrl_obj <- mpCtrl(list(
-  est = mseCtrl(method = SAM_wrapper,
-                     args = c(### short term forecast specifications
-                       forecast = TRUE, 
-                       fwd_trgt = "fsq", fwd_yrs = 1, 
-                       cod4_stf_def,
-                       ### speeding SAM up
-                       newtonsteps = 0, rel.tol = 0.001,
-                       par_ini = list(sam_initial),
-                       track_ini = TRUE, ### store ini for next year
-                       ### SAM model specifications
-                       conf = list(cod4_conf_sam_no_mult),
-                       parallel = FALSE ### TESTING ONLY
-                     )),
+  est = mseCtrl(method = est_SAM_shortcut,
+                args = c(### short term forecast specifications
+                         forecast = TRUE, 
+                         fwd_trgt = "fsq", fwd_yrs = 1, 
+                         cod4_stf_def
+               )),
   phcr = mseCtrl(method = phcr_WKNSMSE,
                       args = refpts_mse),
   hcr = mseCtrl(method = hcr_WKNSME, args = list(option = "A")),
-  isys = mseCtrl(method = is_WKNSMSE, 
-                    args = c(hcrpars = list(refpts_mse),
-                             ### for short term forecast
-                             fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
-                             cod4_stf_def#,
-                             ### TAC constraint
-                             #TAC_constraint = TRUE,
-                             #lower = -Inf, upper = Inf,
-                             #Btrigger_cond = FALSE,
-                             ### banking and borrowing 
-                             #BB = TRUE,
-                             #BB_check_hcr = FALSE,
-                             #BB_check_fc = TRUE,
-                             #BB_rho = list(c(-0.1, 0.1))
-                    ))#,
-  #ctrl.tm = NULL
+  isys = mseCtrl(method = is_WKNSMSE,
+                 args = c(hcrpars = list(refpts_mse),
+                          ### for short term forecast
+                          fwd_trgt = list(c("fsq", "hcr")), fwd_yrs = 2,
+                          cod4_stf_def,
+                          shortcut = TRUE
+                          ### TAC constraint
+                          #TAC_constraint = TRUE,
+                          #lower = -Inf, upper = Inf,
+                          #Btrigger_cond = FALSE,
+                          ### banking and borrowing
+                          #BB = TRUE,
+                          #BB_check_hcr = FALSE,
+                          #BB_check_fc = TRUE,
+                          #BB_rho = list(c(-0.1, 0.1))
+                   ))#,
+  #tm = NULL
 ))
 ### additional tracking metrics
 tracking_add <- c("BB_return", "BB_bank_use", "BB_bank", "BB_borrow")
@@ -758,15 +744,16 @@ saveRDS(object = input,
 ### run MSE ####
 ### ------------------------------------------------------------------------ ###
 
+# ### run MSE
+# ### WARNING: takes a while...
+# ### check normal execution
+# res1 <- mp(om = input$om,
+#            oem = input$oem,
+#            #iem = iem,
+#            ctrl = input$ctrl,
+#            args = input$args,
+#            tracking = input$tracking)
 
-### run MSE
-### WARNING: takes a while...
-### check normal execution
-res1 <- mp(om = input$om,
-           oem = input$oem,
-           #iem = iem,
-           ctrl = input$ctrl,
-           args = input$args,
-           tracking = input$tracking)
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
+
