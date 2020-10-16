@@ -746,7 +746,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### get recent TAC
   if (args$iy == ay) {
     ### in first year of simulation, use value from OM saved earlier in ay
-    TAC_last <- tracking["metric.is", ac(ay)]
+    TAC_last <- tracking["C.om", ac(ay)]
   } else {
     ### in following years, use TAC advised the year before
     TAC_last <- tracking["metric.is", ac(ay - 1)]
@@ -820,13 +820,28 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### recruitment (value previously calculated)
     rec_fc <- rec(stk0_stf)[, ac(ctrl@target$year)]
     
-    ### stf
-    stk0_stf[] <- fwd(object = stk0_stf, control = ctrl, 
-                      sr = list(model = "mean", params = FLPar(c(rec_fc))),
-                      maxF = 5)
+    ### extend forecast, if required to check biomass after TAC year
+    if (identical(fwd_trgt[length(fwd_trgt)], fwd_trgt[length(fwd_trgt) - 1])) {
+      stk0_stf <- window(stk0_stf, end = dims(stk0_stf)$maxyear + 1)
+      stk0_stf[, ac(dims(stk0_stf)$maxyear)] <- 
+        stk0_stf[, ac(dims(stk0_stf)$maxyear - 1)]
+      ctrl_fc <- getCtrl(values = ctrl@trgtArray[, "val",], 
+                       quantity = ac(ctrl@target$quantity), 
+                       years = seq(from = ctrl@target$year, length.out = 2), 
+                       it = it)
+      ### stf
+      stk0_stf[] <- fwd(object = stk0_stf, control = ctrl_fc, 
+                        sr = list(model = "mean", params = FLPar(c(rec_fc))),
+                        maxF = 5)
+    } else {
+      ### stf
+      stk0_stf[] <- fwd(object = stk0_stf, control = ctrl, 
+                        sr = list(model = "mean", params = FLPar(c(rec_fc))),
+                        maxF = 5)
+    }
     
     ### catch target:
-    catch_target <- c(catch(stk0_stf)[, ac(ctrl@target$year)])
+    catch_target <- c(catch(stk0_stf)[, ac(ay + 1)])
     
   }
   
@@ -871,13 +886,17 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     if (isTRUE(Btrigger_cond)) {
       
       ### get SSB in TAC year from forecast
-      SSB_TACyr <- sapply(fc, function(x) {
-        if (is(x, "error")) {
-          return(NA)
-        } else {
-          return(x[ac(ay + 1), "ssb:median"])
-        }
-      })
+      if (!isTRUE(shortcut)) {
+        SSB_TACyr <- sapply(fc, function(x) {
+          if (is(x, "error")) {
+            return(NA)
+          } else {
+            return(x[ac(ay + 1), "ssb:median"])
+          }
+        })
+      } else {
+        SSB_TACyr <- c(ssb(stk0_stf)[, ac(ay + 1)])
+      }
       
       ### iterations where SSB is at or above Btrigger at start of TAC year
       pos_Btrigger <- which(SSB_TACyr >= c(hcrpars["Btrigger"]))
@@ -889,7 +908,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     }
     
     ### modify advice
-    catch_target[pos] <- catch_prev[pos] * changes_new[pos]/100
+    catch_target[pos] <- c(catch_prev)[pos] * c(changes_new)[pos]/100
     
   }
   
@@ -952,82 +971,104 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
         pos_constr <- which(changes_new != change)
         if (isTRUE(length(pos_constr) > 0)) {
           
-          ### go through model fits of requested iterations
-          fc_new <- foreach(fit_i = fit[pos_constr], 
-                            iter_i = seq_along(fit)[pos_constr],
-                            .errorhandling = "pass") %do% {
-                          
-            ### overwrite landing fraction with last year, if requested
-            if (!is.null(fwd_yrs_lf_remove)) {
-              ### index for years to remove/overwrite
-              idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
-              ### overwrite
-              fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
+          if (!isTRUE(shortcut)) {
+            ### go through model fits of requested iterations
+            fc_new <- foreach(fit_i = fit[pos_constr], 
+                              iter_i = seq_along(fit)[pos_constr],
+                              .errorhandling = "pass") %do% {
+                            
+              ### overwrite landing fraction with last year, if requested
+              if (!is.null(fwd_yrs_lf_remove)) {
+                ### index for years to remove/overwrite
+                idx_remove <- nrow(fit_i$data$landFrac) + fwd_yrs_lf_remove
+                ### overwrite
+                fit_i$data$landFrac[idx_remove, ] <- fit_i$data$landFrac[rep(nrow(fit_i$data$landFrac), length(idx_remove)), ]
+              }
+              
+              ### check how to do forecast
+              ### target recently advised TAC
+              catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
+              ### scaled F
+              fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
+              ### target new TAC after implementation of TAC constraint TAC year
+              catchval[which(fwd_trgt == "hcr")[1]] <- catch_target[iter_i]
+              ### target fsq (F that corresponds to TAC) in following years
+              fscale[which(fwd_trgt == "hcr")[-1]] <- 1
+              
+              ### years for average values
+              ave.years <- max(fit_i$data$years) + fwd_yrs_average
+              ### years for sampling of recruitment years
+              if (is.null(fwd_yrs_rec_start)) {
+                rec.years <- fit_i$data$years ### use all years, if not defined
+              } else {
+                rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
+              }
+              
+              ### years where selectivity is not used for mean in forecast
+              overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
+              
+              ### forecast 
+              fc_i <- stockassessment::forecast(fit = fit_i, 
+                                                fscale = fscale, 
+                                                catchval = catchval,
+                                                ave.years = ave.years,
+                                                rec.years = rec.years,
+                                            overwriteSelYears = overwriteSelYears,
+                                                splitLD = fwd_splitLD)
+              
+              ### return forecast table
+              return(attr(fc_i, "tab"))
+              
             }
             
-            ### check how to do forecast
-            ### target recently advised TAC
-            catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
-            ### scaled F
-            fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
-            ### target new TAC after implementation of TAC constraint TAC year
-            catchval[which(fwd_trgt == "hcr")[1]] <- catch_target[iter_i]
-            ### target fsq (F that corresponds to TAC) in following years
-            fscale[which(fwd_trgt == "hcr")[-1]] <- 1
+            ### overwrite updated forecasts
+            fc[pos_constr] <- fc_new
             
-            ### years for average values
-            ave.years <- max(fit_i$data$years) + fwd_yrs_average
-            ### years for sampling of recruitment years
-            if (is.null(fwd_yrs_rec_start)) {
-              rec.years <- fit_i$data$years ### use all years, if not defined
-            } else {
-              rec.years <- seq(from = fwd_yrs_rec_start, max(fit_i$data$years))
-            }
+            ### get SSB in TAC year
+            SSB_TACyr <- sapply(fc, function(x) {
+              if (is(x, "error")) {
+                return(NA)
+              } else {
+                return(x[ac(ay + 1), "ssb:median"])
+              }
+            })
+            ### get SSB in year after TAC year
+            SSB_TACyr1 <- sapply(fc, function(x) {
+              if (is(x, "error")) {
+                return(NA)
+              } else {
+                return(x[ac(ay + 2), "ssb:median"])
+              }
+            })
+            ### get F in TAC year
+            F_TACyr <- sapply(fc, function(x) {
+              if (is(x, "error")) {
+                return(NA)
+              } else {
+                return(x[ac(ay + 1), "fbar:median"])
+              }
+            })
             
-            ### years where selectivity is not used for mean in forecast
-            overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
+          } else {
             
-            ### forecast 
-            fc_i <- stockassessment::forecast(fit = fit_i, 
-                                              fscale = fscale, 
-                                              catchval = catchval,
-                                              ave.years = ave.years,
-                                              rec.years = rec.years,
-                                          overwriteSelYears = overwriteSelYears,
-                                              splitLD = fwd_splitLD)
-            
-            ### return forecast table
-            return(attr(fc_i, "tab"))
+            ### shortcut forecast
+            ctrl_fc1 <- getCtrl(values = catch_target, 
+                       quantity = "catch", 
+                       years = ay + 1, 
+                       it = it)
+            stk0_stf[] <- fwd(object = stk0_stf, control = ctrl_fc1, 
+                              sr = list(model = "mean", params = FLPar(c(rec_fc))),
+                              maxF = 5)
+            ### no need to go into ay+2 because FLash already updated SSB
+
+            ### get SSB in TAC year
+            SSB_TACyr <- c(ssb(stk0_stf)[, ac(ay + 1)])
+            ### get SSB in year after TAC year
+            SSB_TACyr1 <- c(ssb(stk0_stf)[, ac(ay + 2)])
+            ### get F in TAC year
+            F_TACyr <- c(fbar(stk0_stf)[, ac(ay + 1)])
             
           }
-          
-          ### overwrite updated forecasts
-          fc[pos_constr] <- fc_new
-          
-          ### get SSB in TAC year
-          SSB_TACyr <- sapply(fc, function(x) {
-            if (is(x, "error")) {
-              return(NA)
-            } else {
-              return(x[ac(ay + 1), "ssb:median"])
-            }
-          })
-          ### get SSB in year after TAC year
-          SSB_TACyr1 <- sapply(fc, function(x) {
-            if (is(x, "error")) {
-              return(NA)
-            } else {
-              return(x[ac(ay + 2), "ssb:median"])
-            }
-          })
-          ### get F in TAC year
-          F_TACyr <- sapply(fc, function(x) {
-            if (is(x, "error")) {
-              return(NA)
-            } else {
-              return(x[ac(ay + 1), "fbar:median"])
-            }
-          })
           
           ### check if SSB in TAC year below Bpa AND F above Fpa
           pos_fc1 <- which(SSB_TACyr < c(hcrpars["Bpa"]) & 
