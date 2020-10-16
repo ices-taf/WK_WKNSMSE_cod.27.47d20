@@ -1731,15 +1731,15 @@ mp_stats <- function(input, res, OM = "cod4") {
     conv_failed = NA,
     F_maxed = sum(window(fbar(stock(res)), start = 2019) >= 2),
     slope_long = mean(c(window(res@tracking["metric.hcr"], 
-                               start = 2028) < (Ftrgt * (1 - 1e-16))),
+                               start = 2028) < (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))),
                       na.rm = TRUE),
     slope_medium = mean(c(window(res@tracking["metric.hcr"],
                                  start = 2023, end = 2027) < 
-                            (Ftrgt * (1 - 1e-16))), 
+                            (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))), 
                         na.rm = TRUE),
     slope_short = mean(c(window(res@tracking["metric.hcr"], 
                                 start = 2018, end = 2022) <
-                           (Ftrgt * (1 - 1e-16))),
+                           (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))),
                        na.rm = TRUE)
   )
 }
