@@ -1505,3 +1505,75 @@ calculate_ddM <- function(stk,
   return(M_new)
   
 }
+
+### ------------------------------------------------------------------------ ###
+### summary statistics ####
+### ------------------------------------------------------------------------ ###
+mp_stats <- function(input, res, OM = "cod4") {
+
+  Blim <- ifelse(OM == "cod4_alt2", 108000, 107000)
+  ### OM
+  list(
+    OM = OM,
+    Ftrgt = input$ctrl$phcr@args$Ftrgt[1],
+    Btrigger = input$ctrl$phcr@args$Btrigger[1],
+    HCR = input$ctrl$hcr@args$option[1],
+    TACconstr = input$ctrl$isys@args$TAC_constraint[1],
+    BB = input$ctrl$isys@args$BB[1],
+    Blim = Blim,
+    ### stats
+    catch_median_long = median(window(catch(res@stock), start = 2029)),
+    catch_median_short = median(window(catch(res@stock), start = 2019, end = 2023)),
+    catch_median_medium = median(window(catch(res@stock), start = 2024, end = 2028)),
+    risk1_full = mean(window(ssb(res@stock), start = 2019) < Blim),
+    risk1_long = mean(window(ssb(res@stock), start = 2029) < Blim),
+    risk1_short = mean(window(ssb(res@stock), start = 2019, end = 2023) < Blim),
+    risk1_medium = mean(window(ssb(res@stock), start = 2024, end = 2028) < Blim),
+    risk3_long = max(iterMeans(window(ssb(res@stock), start = 2029) < Blim)),
+    risk3_short = max(iterMeans(window(ssb(res@stock), start = 2019, 
+                                       end = 2023) < Blim)),
+    risk3_medium = max(iterMeans(window(ssb(res@stock), start = 2024, 
+                                        end = 2028) < Blim)),
+    iav_long = iav(object = catch(window(stock(res), start = 2028)), 
+                   summary_all = median),
+    iav_short = iav(object = catch(window(stock(res), start = 2018, 
+                                          end = 2023)), 
+                    summary_all = median),
+    iav_medium = iav(object = catch(window(stock(res), start = 2023, 
+                                           end = 2028)),
+                     summary_all = median),
+    iavTAC_long = iav(object = window(res@tracking["metric.is"], start = 2028, 
+                                      end = 2037),
+                      summary_all = median),
+    iavTAC_short = iav(object = window(res@tracking["metric.is"], start = 2018, 
+                                       end = 2022),
+                       summary_all = median),
+    iavTAC_medium = iav(object = window(res@tracking["metric.is"], start = 2023, 
+                                        end = 2027),
+                        summary_all = median),
+    ssb_median_long = median(window(ssb(res@stock), start = 2029)),
+    ssb_median_short = median(window(ssb(res@stock), start = 2019, end = 2023)),
+    ssb_median_medium = median(window(ssb(res@stock), start = 2024, end = 2028)),
+    fbar_median_long = median(window(fbar(res@stock), start = 2029)),
+    fbar_median_short = median(window(fbar(res@stock), start = 2019, end = 2023)),
+    fbar_median_medium = median(window(fbar(res@stock), start = 2024, end = 2028)),
+    recovery_proportion = mean(apply(window(ssb(res@stock), 
+                                            start = 2019) >= 150000, 6, max)),
+    recovery_time = median(apply(window(ssb(res@stock), 
+                                        start = 2019)@.Data >= 150000, 6, 
+      function(x) { if (any(x)) { which(x)[1] } else {Inf} })),
+    conv_failed = NA,
+    F_maxed = sum(window(fbar(stock(res)), start = 2019) >= 2),
+    slope_long = mean(c(window(res@tracking["metric.hcr"], 
+                               start = 2028) < (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))),
+                      na.rm = TRUE),
+    slope_medium = mean(c(window(res@tracking["metric.hcr"],
+                                 start = 2023, end = 2027) < 
+                            (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))), 
+                        na.rm = TRUE),
+    slope_short = mean(c(window(res@tracking["metric.hcr"], 
+                                start = 2018, end = 2022) <
+                           (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))),
+                       na.rm = TRUE)
+  )
+}
