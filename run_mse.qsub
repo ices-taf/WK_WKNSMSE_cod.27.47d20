@@ -2,12 +2,10 @@
 ## job name
 #PBS -N WKNSMSE
 ## maximum runtime
-#PBS -l walltime=02:00:00 
+#PBS -l walltime=10:00:00 
 ## select number of nodes, cpus (per node) and memory (per node)
-#PBS -l select=1:ncpus=24:mpiprocs=24:ompthreads=1:mem=120gb 
+#PBS -l select=1:ncpus=24:mem=124gb 
 ## send mail when job aborts/begins/ends
-#PBS -M s.fischer18@imperial.ac.uk
-#PBS -m abe 
 ## standard output standard error
 #PBS -o reports
 #PBS -e reports
@@ -22,21 +20,31 @@ echo "The following ressources have been allocated"
 cat $PBS_NODEFILE
 
 ### set working directory
-cd $HOME/git/WK_WKNSMSE_cod.27.47d20
+cd $HOME/git/WK_WKNSMSE_cod.27.47d20_mse2.0
 
 ## load modules
 ## anaconda includes R and OpenMPI
 module purge
 module load mpi anaconda3/personal
 ### activate MPI environment
-source activate r_mpi
+source activate R_2020
 
 echo "starting the simulations..."
 ### run MPI job
-mpiexec R CMD BATCH --vanilla --quiet '--args iters=1 years=20 nblocks=1 par_env=1 n_workers=0 HCRoption=1 HCR_comb=6 TAC_constraint=0 BB=0' $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$PBS_JOBID.Rout
+# mpiexec R CMD BATCH --vanilla --quiet '--args iters=1 years=20 nblocks=1 par_env=1 n_workers=0 HCRoption=1 HCR_comb=6 TAC_constraint=0 BB=0' $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$PBS_JOBID.Rout
 ### run without MPI
 # R CMD BATCH --vanilla --quiet '--args iters=1 years=20 nblocks=1 par_env=2 n_workers=0 HCRoption=1 HCR_comb=6 TAC_constraint=0 BB=0' $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$PBS_JOBID.Rout
 ### run array job
-R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=28 HCRoption=1 HCR_comb=$PBS_ARRAY_INDEX TAC_constraint=0 BB=0" $HOME/git/WK_WKNSMSE_cod.27.47d20/run_mse.R $HOME/reports/$PBS_JOBID.$PBS_ARRAY_INDEX.Rout
+R CMD BATCH --vanilla --quiet "--args iters=1000 years=20 nblocks=200 par_env=2 n_workers=20 HCRoption=1 HCR_comb=$PBS_ARRAY_INDEX TAC_constraint=0 BB=0 saveMP=FALSE calc_stats=TRUE" $HOME/git/WK_WKNSMSE_cod.27.47d20_mse2.0/run_mse.R $HOME/reports/$PBS_JOBID.$PBS_ARRAY_INDEX.Rout
 
-echo "done!"
+echo ""
+echo "R job finished!"
+
+echo ""
+## print details about job
+echo "job details from PBS:"
+echo "==============================================================================="
+qstat -f
+echo "==============================================================================="
+qstat -t
+echo "==============================================================================="
