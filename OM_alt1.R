@@ -167,7 +167,7 @@ max(harvest(stk))
 # 2.086832 in year 2001 for age 6 (plusgroup)
 
 ### get estimated catch numbers
-catch_n <- uncertainty$cach_n
+catch_n <- uncertainty$catch_n
 catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
   catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
 
