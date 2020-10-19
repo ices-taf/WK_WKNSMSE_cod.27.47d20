@@ -155,7 +155,9 @@ stock(stk)[] <- computeStock(stk)
 ### add noise to F
 harvest(stk)[] <- uncertainty$harvest
 
-### catch noise added later
+### add noise to catch numbers
+catch.n(stk)[, dimnames(stk)$year[-dims(stk)$year]] <- uncertainty$catch_n
+catch(stk) <- computeCatch(stk)
 
 if (isTRUE(verbose)) plot(stk, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
@@ -167,6 +169,8 @@ max(harvest(stk))
 
 ### get estimated catch numbers
 catch_n <- uncertainty$catch_n
+catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <- 
+  catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] * catch_mult
 
 
 ### ------------------------------------------------------------------------ ###
