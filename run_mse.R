@@ -22,8 +22,11 @@ if (length(args) > 0) {
   for (i in seq_along(args)) eval(parse(text = args[[i]]))
   
   ### parallelisation environment
-  if (!exists("par_env")) par_env <- 1
+  if (!exists("par_env")) par_env <- 2
   if (!exists("n_workers")) n_workers <- 1
+  ### some basic arguments
+  if (!exists("saveMP")) saveMP <- TRUE
+  if (!exists("calc_stats")) calc_stats <- TRUE
   
 } else {
   
@@ -39,16 +42,23 @@ if (length(args) > 0) {
 library(FLfse)
 library(stockassessment)
 library(ggplotFL)
-library(FLAssess)
+#library(FLAssess)
 library(mse)
 ### load files from package mse for easier debugging
 #devtools::load_all("../mse/")
 library(FLash)
 library(tidyr)
 library(dplyr)
+library(foreach)
+library(doRNG)
 
 ### load additional functions
 source("a4a_mse_WKNSMSE_funs.R")
+
+### the original WKNSMSE was run with R 3.5
+### for exact reproducibility in R 3.6, the random number generation must be
+### be changed
+if (getRversion() >= 3.6) RNGkind(sample.kind = "Rounding")
 
 ### ------------------------------------------------------------------------ ###
 ### setup parallel environment ####
@@ -82,6 +92,7 @@ if (par_env == 1) {
   library(foreach)
   library(doRNG)
   source("a4a_mse_WKNSMSE_funs.R")
+  if (getRversion() >= 3.6) RNGkind(sample.kind = "Rounding")
 }
 
 ### set random seed for reproducibility
@@ -157,170 +168,187 @@ if (HCRoption %in% 1:6) {
   
 }
 
-### implement
-if (exists("HCR_comb")) {
+### ------------------------------------------------------------------------ ###
+### loop through several options? ####
+### ------------------------------------------------------------------------ ###
+
+
+### default HCR
+if (!exists("HCR_comb")) {
+  HCR_comb <- 186
+}
+  
+. <- foreach(HCR_comb_i = HCR_comb) %dopar% {
   
   ### set Btrigger
-  Btrigger <- hcr_vals[HCR_comb, "Btrigger"]
+  Btrigger <- hcr_vals[HCR_comb_i, "Btrigger"]
   input$ctrl$phcr@args$Btrigger <- Btrigger
   input$ctrl$isys@args$hcrpars$Btrigger <- Btrigger
   
   ### set Ftrgt
-  Ftrgt <- hcr_vals[HCR_comb, "Ftrgt"]
+  Ftrgt <- hcr_vals[HCR_comb_i, "Ftrgt"]
   input$ctrl$phcr@args$Ftrgt <- Ftrgt
   input$ctrl$isys@args$hcrpars$Ftrgt <- Ftrgt
   
   cat(paste0("\nSetting custom Btrigger/Ftrgt values.\n",
-             "Using HCR_comb = ", HCR_comb, "\n",
+             "Using HCR_comb_i = ", HCR_comb_i, "\n",
              "Ftrgt = ", Ftrgt, "\n",
              "Btrigger = ", Btrigger, "\n\n"))
-  
-} else {
-  
-  cat(paste0("\nUsing default Btrigger/Ftrgt values.\n",
-             "Ftrgt = ", input$ctrl$phcr@args$Ftrgt, "\n",
-             "Btrigger = ", input$ctrl$phcr@args$Btrigger, "\n\n"))
-  
-}
-### try uniform grid search with iteration-specific Ftrgt/Btrgigger combination
-if (exists("grid_search")) {
-  if (isTRUE(as.logical(grid))) {
-    hcr_vals <- expand.grid(Btrigger = seq(from = 100000, to = 200000, 
-                                           length.out = 25),
-                            Ftrgt = seq(from = 0.1, to = 0.49, length.out = 40))
-    ### set Btrigger
-    Btrigger <- hcr_vals$Btrigger
-    input$ctrl$phcr@args$Btrigger <- Btrigger
-    input$ctrl$isys@args$hcrpars$Btrigger <- Btrigger
-    ### set Ftrgt
-    Ftrgt <- hcr_vals$Ftrgt
-    input$ctrl$phcr@args$Ftrgt <- Ftrgt
-    input$ctrl$isys@args$hcrpars$Ftrgt <- Ftrgt
-    cat(paste0("\nTrying uniform Btrigger/Ftrgt combinations.\n"))
     
+  ### try uniform grid search with iteration-specific Ftrgt/Btrgigger combination
+  if (exists("grid_search")) {
+    if (isTRUE(as.logical(grid))) {
+      hcr_vals <- expand.grid(Btrigger = seq(from = 100000, to = 200000, 
+                                             length.out = 25),
+                              Ftrgt = seq(from = 0.1, to = 0.49, length.out = 40))
+      ### set Btrigger
+      Btrigger <- hcr_vals$Btrigger
+      input$ctrl$phcr@args$Btrigger <- Btrigger
+      input$ctrl$isys@args$hcrpars$Btrigger <- Btrigger
+      ### set Ftrgt
+      Ftrgt <- hcr_vals$Ftrgt
+      input$ctrl$phcr@args$Ftrgt <- Ftrgt
+      input$ctrl$isys@args$hcrpars$Ftrgt <- Ftrgt
+      cat(paste0("\nTrying uniform Btrigger/Ftrgt combinations.\n"))
+      
+    }
   }
-}
-
-### ------------------------------------------------------------------------ ###
-### TAC constraint
-input$ctrl$isys@args$TAC_constraint <- FALSE
-### check conditions
-### either manually requested or as part of HCR options 4-6 
-if (exists("TAC_constraint")) {
-  if (isTRUE(as.logical(TAC_constraint))) {
-    input$ctrl$isys@args$TAC_constraint <- TRUE
+  
+  ### ------------------------------------------------------------------------ ###
+  ### TAC constraint
+  input$ctrl$isys@args$TAC_constraint <- FALSE
+  ### check conditions
+  ### either manually requested or as part of HCR options 4-6 
+  if (exists("TAC_constraint")) {
+    if (isTRUE(as.logical(TAC_constraint))) {
+      input$ctrl$isys@args$TAC_constraint <- TRUE
+    }
   }
-}
-if (HCRoption %in% 4:6) {
-    input$ctrl$isys@args$TAC_constraint <- TRUE
-}
-### implement
-if (isTRUE(input$ctrl$isys@args$TAC_constraint)) {
-    
-    input$ctrl$isys@args$lower <- 80
-    input$ctrl$isys@args$upper <- 125
-    input$ctrl$isys@args$Btrigger_cond <- TRUE
-    
-    cat(paste0("\nImplementing TAC constraint.\n\n"))
-    
-} else {
-    
-    cat(paste0("\nTAC constraint NOT implemented.\n\n"))
-    
-}
-### manual overwrite/removal of BB if requested
-if (exists("TAC_constraint")) {
-  if (isTRUE(TAC_constraint == -1)) {
-    input$ctrl$isys@args$TAC_constraint <- FALSE
+  if (HCRoption %in% 4:6) {
+      input$ctrl$isys@args$TAC_constraint <- TRUE
   }
-}
-
-### ------------------------------------------------------------------------ ###
-### banking & borrowing
-input$ctrl$isys@args$BB <- FALSE
-input$iem <- NULL
-
-### check conditions
-### either manually requested or as part of HCR options 4-6 
-if (exists("BB")) {
-  if (isTRUE(BB == 1)) {
-    
+  ### implement
+  if (isTRUE(input$ctrl$isys@args$TAC_constraint)) {
+      
+      input$ctrl$isys@args$lower <- 80
+      input$ctrl$isys@args$upper <- 125
+      input$ctrl$isys@args$Btrigger_cond <- TRUE
+      
+      cat(paste0("\nImplementing TAC constraint.\n\n"))
+      
+  } else {
+      
+      cat(paste0("\nTAC constraint NOT implemented.\n\n"))
+      
+  }
+  ### manual overwrite/removal of BB if requested
+  if (exists("TAC_constraint")) {
+    if (isTRUE(TAC_constraint == -1)) {
+      input$ctrl$isys@args$TAC_constraint <- FALSE
+    }
+  }
+  
+  ### ------------------------------------------------------------------------ ###
+  ### banking & borrowing
+  input$ctrl$isys@args$BB <- FALSE
+  input$iem <- NULL
+  
+  ### check conditions
+  ### either manually requested or as part of HCR options 4-6 
+  if (exists("BB")) {
+    if (isTRUE(BB == 1)) {
+      
+      input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
+      input$ctrl$isys@args$BB <- TRUE
+      input$ctrl$isys@args$BB_check_hcr <- TRUE
+      input$ctrl$isys@args$BB_check_fc <- TRUE
+      input$ctrl$isys@args$BB_rho <- c(-0.1, 0.1)
+      
+    }
+  
+  }
+  
+  if (HCRoption %in% 4:6) {
+      
     input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
     input$ctrl$isys@args$BB <- TRUE
-    input$ctrl$isys@args$BB_check_hcr <- TRUE
-    input$ctrl$isys@args$BB_check_fc <- TRUE
     input$ctrl$isys@args$BB_rho <- c(-0.1, 0.1)
+    input$ctrl$isys@args$BB_check_hcr <- FALSE
+    input$ctrl$isys@args$BB_check_fc <- FALSE
+    
+    if (HCRoption %in% 4) {
+      
+      input$ctrl$isys@args$BB_check_hcr <- TRUE
+      
+    } else if (HCRoption %in% 5:6) {
+      
+      input$ctrl$isys@args$BB_check_fc <- TRUE
+      
+    }
     
   }
-
-}
-
-if (HCRoption %in% 4:6) {
-    
-  input$iem <- FLiem(method = iem_WKNSMSE, args = list(BB = TRUE))
-  input$ctrl$isys@args$BB <- TRUE
-  input$ctrl$isys@args$BB_rho <- c(-0.1, 0.1)
-  input$ctrl$isys@args$BB_check_hcr <- FALSE
-  input$ctrl$isys@args$BB_check_fc <- FALSE
-  
-  if (HCRoption %in% 4) {
-    
-    input$ctrl$isys@args$BB_check_hcr <- TRUE
-    
-  } else if (HCRoption %in% 5:6) {
-    
-    input$ctrl$isys@args$BB_check_fc <- TRUE
-    
-  }
-  
-}
-### manual overwrite/removal of BB
-if (exists("BB")) {
-  if (isTRUE(BB == -1)) {
-    
-    input$iem <- NULL
-    input$ctrl$isys@args$BB <- FALSE
+  ### manual overwrite/removal of BB
+  if (exists("BB")) {
+    if (isTRUE(BB == -1)) {
+      
+      input$iem <- NULL
+      input$ctrl$isys@args$BB <- FALSE
+      
+    }
     
   }
   
-}
-
-
-if (!is.null(input$iem)) {
+  
+  if (!is.null(input$iem)) {
+      
+    cat(paste0("\nImplementing banking and borrowing.\n\n"))
     
-  cat(paste0("\nImplementing banking and borrowing.\n\n"))
+  } else {
+    
+    cat(paste0("\nBanking and borrowing NOT implemented.\n\n"))
+    
+  }
   
-} else {
   
-  cat(paste0("\nBanking and borrowing NOT implemented.\n\n"))
+  ### ------------------------------------------------------------------------ ###
+  ### run MSE ####
+  ### ------------------------------------------------------------------------ ###
+  
+  ### run MSE
+  res1 <- mp(om = input$om,
+             oem = input$oem,
+             iem = input$iem,
+             ctrl = input$ctrl,
+             args = input$args,
+             tracking = input$tracking)
+  
+  ### save results
+  path_out <- paste0("output/runs/cod4/", iters, "_", years)
+  dir.create(path = path_out, recursive = TRUE)
+  file_out <- paste0(OM_alt, "_",
+                     "HCR-", input$ctrl$hcr@args$option[1],
+                     "_Ftrgt-", input$ctrl$phcr@args$Ftrgt[1],
+                     "_Btrigger-", input$ctrl$phcr@args$Btrigger[1],
+                     "_TACconstr-", input$ctrl$isys@args$TAC_constraint[1],
+                     "_BB-", input$ctrl$isys@args$BB[1]
+  )
+  
+  if (isTRUE(saveMP))
+    saveRDS(object = res1, paste0(path_out, "/MP_", file_out, ".rds"))
+  
+  ### ---------------------------------------------------------------------- ###
+  ### stats ####
+  ### ---------------------------------------------------------------------- ###
+  
+  if (isTRUE(calc_stats)) {
+    
+    res_stats <- mp_stats(input = input, res = res1, OM = OM_alt)
+    saveRDS(object = res_stats, paste0(path_out, "/stats_", file_out, ".rds"))
+    
+    
+  }
   
 }
-
-
-### ------------------------------------------------------------------------ ###
-### run MSE ####
-### ------------------------------------------------------------------------ ###
-
-### run MSE
-res1 <- mp(om = input$om,
-           oem = input$oem,
-           iem = input$iem,
-           ctrl = input$ctrl,
-           args = input$args,
-           tracking = input$tracking)
-
-### save results
-path_out <- paste0("output/runs/cod4/", iters, "_", years)
-dir.create(path = path_out, recursive = TRUE)
-file_out <- paste0(OM_alt, "_",
-                   "HCR-", input$ctrl$hcr@args$option[1],
-                   "_Ftrgt-", input$ctrl$phcr@args$Ftrgt[1],
-                   "_Btrigger-", input$ctrl$phcr@args$Btrigger[1],
-                   "_TACconstr-", input$ctrl$isys@args$TAC_constraint[1],
-                   "_BB-", input$ctrl$isys@args$BB[1]
-)
-
-saveRDS(object = res1, paste0(path_out, "/", file_out, ".rds"))
 
 ### ------------------------------------------------------------------------ ###
 ### combine and plot ####
@@ -359,9 +387,9 @@ saveRDS(object = res1, paste0(path_out, "/", file_out, ".rds"))
 ### -> kill R, the MPI processes stop afterwards
 
 ### try killing current job...
-if (par_env == 1 & exists("kill")) {
-  system("bkill $LSB_JOBID")
-}
+# if (par_env == 1 & exists("kill")) {
+#   system("bkill $LSB_JOBID")
+# }
 
 quit(save = "no")
 
