@@ -656,7 +656,8 @@ catch_res <- exp(catch_res)
 
 ### for historical period, pass on real observed catch
 ### -> remove deviation
-catch_res[, dimnames(catch_res)$year <= 2017] <- 1
+catch_res[, dimnames(catch_res)$year <= 2017] <- 
+  window(catch.n(stk_orig), end = 2017) / window(catch.n(stk_fwd), end = 2017)
 
 if (isTRUE(verbose)) plot(catch_res, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
