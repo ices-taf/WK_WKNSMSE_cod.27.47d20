@@ -836,14 +836,14 @@ saveRDS(object = input,
 #            args = input$args,
 #            tracking = input$tracking)
 
-debugonce(mp)
-debugonce(goFish)
-res1 <- mp(om = input$om,
-           oem = input$oem,
-           #iem = iem,
-           ctrl = input$ctrl,
-           args = input$args,
-           tracking = input$tracking)
+# debugonce(mp)
+# debugonce(goFish)
+# res1 <- mp(om = input$om,
+#            oem = input$oem,
+#            #iem = iem,
+#            ctrl = input$ctrl,
+#            args = input$args,
+#            tracking = input$tracking)
 
 
 

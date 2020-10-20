@@ -738,11 +738,11 @@ saveRDS(object = input,
 ### run MSE
 ### WARNING: takes a while...
 ### check normal execution
-res1 <- mp(om = input$om,
-           oem = input$oem,
-           #iem = iem,
-           ctrl = input$ctrl,
-           args = input$args,
-           tracking = input$tracking)
+# res1 <- mp(om = input$om,
+#            oem = input$oem,
+#            #iem = iem,
+#            ctrl = input$ctrl,
+#            args = input$args,
+#            tracking = input$tracking)
 ### create Rmarkdown file
 # knitr::spin(hair = "OM.R", format = "Rmd", precious = TRUE, comment = c('^### ------------------------------------------------------------------------ ###$', '^### ------------------------------------------------------------------------ ###$'))
