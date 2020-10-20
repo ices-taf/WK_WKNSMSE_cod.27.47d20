@@ -1716,7 +1716,8 @@ calculate_ddM <- function(stk,
 ### ------------------------------------------------------------------------ ###
 ### summary statistics ####
 ### ------------------------------------------------------------------------ ###
-mp_stats <- function(input, res, OM = "cod4") {
+mp_stats <- function(input, res, OM = "cod4",
+                     obs_rho = NA, obs_sd = NA) {
   
   Blim <- ifelse(OM == "cod4_alt2", 108000, 107000)
   ### OM
@@ -1781,6 +1782,8 @@ mp_stats <- function(input, res, OM = "cod4") {
     slope_short = mean(c(window(res@tracking["metric.hcr"], 
                                 start = 2018, end = 2022) <
                            (input$ctrl$phcr@args$Ftrgt[1] * (1 - 1e-16))),
-                       na.rm = TRUE)
+                       na.rm = TRUE),
+    obs_rho = obs_rho, 
+    obs_sd = obs_sd
   )
 }
