@@ -177,8 +177,11 @@ if (HCRoption %in% 1:6) {
 if (!exists("HCR_comb")) {
   HCR_comb <- 186
 }
+
+### parallelisation either along iter or HCR_comb
+`%do_tmp%` <- ifelse(isTRUE(nblocks > 1), foreach::`%do%`, foreach::`%dopar%`)
   
-. <- foreach(HCR_comb_i = HCR_comb) %dopar% {
+. <- foreach(HCR_comb_i = HCR_comb) %do_tmp% {
   
   ### set Btrigger
   Btrigger <- hcr_vals[HCR_comb_i, "Btrigger"]
