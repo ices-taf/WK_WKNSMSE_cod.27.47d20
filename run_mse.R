@@ -110,6 +110,30 @@ input <- readRDS(paste0(path_data, "base_run.rds"))
 input$args$nblocks <- nblocks
 
 ### ------------------------------------------------------------------------ ###
+### modify observation uncertainty ####
+### ------------------------------------------------------------------------ ###
+
+obs_sd_def <- readRDS(paste0(path_data, "obs_sd.rds"))
+obs_rho_def <- readRDS(paste0(path_data, "obs_rho.rds"))
+if (!exists("obs_sd")) obs_sd <- obs_sd_def
+if (!exists("obs_rho")) obs_rho <- obs_rho_def
+
+if (!identical(obs_sd, obs_sd_def) | !identical(obs_rho, obs_rho_def)) {
+  
+  ### create auto-correlated SSB error
+  set.seed(3)
+  ssb_res <- rlnoise(iters, input$oem@deviances$stk$stock.n[1, ] %=% 0, 
+                     sd = obs_sd, 
+                     b = obs_rho)
+  ### replicate SSB error into age structure
+  n_res <- input$oem@deviances$stk$stock.n %=% NA_real_
+  n_res[] <- rep(c(ssb_res), each = 6)
+  input$oem@deviances$stk$stock.n[] <- n_res
+
+}
+
+
+### ------------------------------------------------------------------------ ###
 ### set up HCR & options ####
 ### ------------------------------------------------------------------------ ###
 
@@ -323,7 +347,9 @@ if (!exists("HCR_comb")) {
                      "_Ftrgt-", input$ctrl$phcr@args$Ftrgt[1],
                      "_Btrigger-", input$ctrl$phcr@args$Btrigger[1],
                      "_TACconstr-", input$ctrl$isys@args$TAC_constraint[1],
-                     "_BB-", input$ctrl$isys@args$BB[1]
+                     "_BB-", input$ctrl$isys@args$BB[1],
+                     "_ObsRho-", round(obs_rho, 2),
+                     "_ObsSd-", round(obs_sd, 2)
   )
   
   if (isTRUE(saveMP))
@@ -335,9 +361,9 @@ if (!exists("HCR_comb")) {
   
   if (isTRUE(calc_stats)) {
     
-    res_stats <- mp_stats(input = input, res = res1, OM = OM_alt)
+    res_stats <- mp_stats(input = input, res = res1, OM = OM_alt,
+                          obs_rho = obs_rho, obs_sd = obs_sd)
     saveRDS(object = res_stats, paste0(path_out, "/stats_", file_out, ".rds"))
-    
     
   }
   
