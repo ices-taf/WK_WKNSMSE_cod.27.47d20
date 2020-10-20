@@ -610,6 +610,7 @@ SSB_error <- retro_SSB %>%
               mutate(assessment = NULL)) %>%
   mutate(SSB_ratio = SSB_retro/SSB)
 sd(SSB_error$SSB_ratio)
+# 0.1066348
 ### plot
 trans_from <- function(from = 1) {
   trans <- function(x) x - from
@@ -634,6 +635,7 @@ ggsave(filename = "output/cod2018_retro_res.png",
 ### auto-correlation
 SSB_err_acf <- acf(SSB_error$SSB_ratio)
 c(SSB_err_acf$acf)[2]
+# 0.2506236
 ### plot
 p_acf <- data.frame(acf = SSB_err_acf$acf, lag = seq(SSB_err_acf$n.used) - 1) %>%
   ggplot(aes(x = lag, y = acf)) +
@@ -830,6 +832,9 @@ saveRDS(cod4_conf_sam_no_mult, file = paste0(input_path, "cod4_conf_sam_no_mult"
 saveRDS(catch_n, file = paste0(input_path, "catch_n.rds"))
 ### stock.n residuals from retro
 saveRDS(n_res, file = paste0(input_path, "n_res.rds"))
+### observation uncertainty
+saveRDS(sd(SSB_error$SSB_ratio), file = paste0(input_path, "obs_sd.rds"))
+saveRDS(c(SSB_err_acf$acf)[2], file = paste0(input_path, "obs_rho.rds"))
 ### full image
 save.image(file = paste0(input_path, "image.RData"))
 
@@ -958,12 +963,12 @@ saveRDS(object = input,
 #debugonce(mp)
 #debugonce(goFish)
 #res1 <- do.call(goFish, input)
-res1 <- mp(om = input$om,
-           oem = input$oem,
-           #iem = iem,
-           ctrl = input$ctrl,
-           args = input$args,
-           tracking = input$tracking)
+# res1 <- mp(om = input$om,
+#            oem = input$oem,
+#            #iem = iem,
+#            ctrl = input$ctrl,
+#            args = input$args,
+#            tracking = input$tracking)
 
 
 
