@@ -343,14 +343,17 @@ SAM_wrapper <- function(stk, idx, tracking,
       ### load TAC as catch target
       catchval_i <- ifelse(catchval == -1, c(TAC_last[,,,,, iter_i]), catchval)
       
+      ### arguments for forecast
+      fc_args <- list(fit = fit_i, fscale = fscale_i, catchval = catchval_i,
+                      ave.years = ave.years, rec.years = rec.years,
+                      overwriteSelYears = overwriteSelYears, 
+                      splitLD = fwd_splitLD)
+      ### for compatibility of stockassessment's commit a882a11 and later:
+      if ("savesim" %in% names(formals(base::args(stockassessment::forecast)))) {
+        fc_args$savesim <- TRUE
+      }
       ### run forecast
-      fc_i <- stockassessment::forecast(fit = fit_i, 
-                                        fscale = fscale_i, 
-                                        catchval = catchval_i,
-                                        ave.years = ave.years,
-                                        rec.years = rec.years,
-                                        overwriteSelYears = overwriteSelYears,
-                                        splitLD = fwd_splitLD)
+      fc_i <- do.call(stockassessment::forecast, fc_args)
       
       ### get numbers at age for all forecast years
       numbers <- lapply(seq(fwd_yrs), function(x) {
@@ -640,15 +643,18 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### years where selectivity is not used for mean in forecast
     overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
     
-    ### forecast 
-    fc_i <- stockassessment::forecast(fit = fit_i, 
-                                      fscale = fscale, 
-                                      fval = fval, 
-                                      catchval = catchval,
-                                      ave.years = ave.years,
-                                      rec.years = rec.years,
-                                      overwriteSelYears = overwriteSelYears,
-                                      splitLD = fwd_splitLD)
+    ### arguments for forecast
+    fc_args <- list(fit = fit_i, fscale = fscale, fval = fval, 
+                    catchval = catchval,
+                    ave.years = ave.years, rec.years = rec.years,
+                    overwriteSelYears = overwriteSelYears, 
+                    splitLD = fwd_splitLD)
+    ### for compatibility of stockassessment's commit a882a11 and later:
+    if ("savesim" %in% names(formals(base::args(stockassessment::forecast)))) {
+      fc_args$savesim <- TRUE
+    }
+    ### run forecast
+    fc_i <- do.call(stockassessment::forecast, fc_args)
     
     ### return forecast table
     return(attr(fc_i, "tab"))
@@ -822,14 +828,17 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
             ### years where selectivity is not used for mean in forecast
             overwriteSelYears <- max(fit_i$data$years) + fwd_yrs_sel
             
-            ### forecast 
-            fc_i <- stockassessment::forecast(fit = fit_i, 
-                                              fscale = fscale, 
-                                              catchval = catchval,
-                                              ave.years = ave.years,
-                                              rec.years = rec.years,
-                                          overwriteSelYears = overwriteSelYears,
-                                              splitLD = fwd_splitLD)
+            ### arguments for forecast
+            fc_args <- list(fit = fit_i, fscale = fscale, catchval = catchval,
+                            ave.years = ave.years, rec.years = rec.years,
+                            overwriteSelYears = overwriteSelYears, 
+                            splitLD = fwd_splitLD)
+            ### for compatibility of stockassessment's commit a882a11 and later:
+            if ("savesim" %in% names(formals(base::args(stockassessment::forecast)))) {
+              fc_args$savesim <- TRUE
+            }
+            ### run forecast
+            fc_i <- do.call(stockassessment::forecast, fc_args)
             
             ### return forecast table
             return(attr(fc_i, "tab"))
