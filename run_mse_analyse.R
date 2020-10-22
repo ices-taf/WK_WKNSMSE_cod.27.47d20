@@ -7,2014 +7,625 @@ library(tidyr)
 library(cowplot)
 library(dplyr)
 
-library(doParallel)
-cl <- makeCluster(parallel::detectCores() - 1)
-registerDoParallel(cl)
-
 ### load additional functions
 source("a4a_mse_WKNSMSE_funs.R")
 
 ### ------------------------------------------------------------------------ ###
-### get files ####
+### compare default HCR: full vs shortcut ####
 ### ------------------------------------------------------------------------ ###
 
-path_res <- "output/runs/cod4/1000_20/"
-files_res <- data.frame(file = list.files(path_res, pattern = "*.rds"), 
-                        stringsAsFactors = FALSE)
-files_res <- files_res[!grepl(x = files_res$file, pattern = "*stats*"),, 
-                       drop = FALSE]
-files_res <- files_res[!grepl(x = files_res$file, pattern = "F0.rds"),, 
-                       drop = FALSE]
-
-# files_rename <- files_res$file
-# files_rename <- files_rename[grep(x = files_rename, pattern = "^HCR*")]
-# file.rename(from = paste0("output/runs/cod4/1000_20/", files_rename),
-#             to = paste0("output/runs/cod4/1000_20/cod4_", files_rename))
-files_res$OM <- sapply(strsplit(x = files_res$file, split = "\\_HCR"), "[[", 1)
-files_res$Ftrgt <- as.numeric(
-  gsub(x = regmatches(x = files_res$file, 
-                      m = regexpr(text = files_res$file, 
-                                  pattern = "Ftrgt-0.[0-9]{1,}")),
-       pattern = "Ftrgt-", replacement = ""))
-files_res$Btrigger <- as.numeric(
-  gsub(x = regmatches(x = files_res$file, 
-                      m = regexpr(text = files_res$file,
-            pattern = "Btrigger-[0-9]{1,}[e+]{0,}[0-9]{0,}")),
-       pattern = "Btrigger-", replacement = ""))
-files_res$HCR <- gsub(x = regmatches(x = files_res$file, 
-                      m = regexpr(text = files_res$file, 
-                                  pattern = "HCR-[A-Z]{1,}")),
-                      pattern = "HCR-", replacement = "")
-files_res$TACconstr <- as.logical(
-  gsub(x = regmatches(x = files_res$file, 
-                      m = regexpr(text = files_res$file, 
-                                  pattern = "TACconstr-TRUE|TACconstr-FALSE")),
-       pattern = "TACconstr-", replacement = ""))
-files_res$BB <-  as.logical(
-  gsub(x = regmatches(x = files_res$file,
-                      m = regexpr(text = files_res$file, 
-                                  pattern = "BB-TRUE|BB-FALSE")),
-                  pattern = "BB-", replacement = ""))
-
-
-stats <- readRDS(paste0(path_res, "stats.rds"))
-stats_new <- merge(stats, files_res, all = TRUE)
-### set Blim depending on OM
-stats_new$Blim <- sapply(stats_new$OM, function(x) {
-  switch(x, "cod4" = 107000,"cod4_alt1" = 107000, "cod4_alt2" = 108000,
-         "cod4_alt3" = 107000)})
-### keep only new files
-stats_new <- stats_new[!stats_new$file %in% stats$file, ]
-
-res_list <- foreach(i = seq(nrow(stats_new)), .packages = "mse") %dopar% {
-  tmp <- readRDS(paste0(path_res, stats_new$file[i]))
-  tmp@oem <- FLoem()
-  tmp
-}
-
-### ------------------------------------------------------------------------ ###
-### calculate summary statistics ####
-### ------------------------------------------------------------------------ ###
-### calculate for short- (year 1-5), medium- (year 6-10) and 
-### long-term (year 11-20)
-### risk 1: proportion of stock below Blim, average over iterations and period
-### risk 3: maximum of annual proportions
-### catch: mean catch in period (mean over years and iterations)
-### iav: inter-annual variation of catch, average over years and iterations
-
-
-### catch
-stats_new$catch_long <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  mean(window(catch(x@stock), start = 2029))
-}
-stats_new$catch_short <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  mean(window(catch(x@stock), start = 2019, end = 2023))
-}
-stats_new$catch_medium <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  mean(window(catch(x@stock), start = 2024, end = 2028))
-}
-### catch median
-stats_new$catch_median_long <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  median(window(catch(x@stock), start = 2029))
-}
-stats_new$catch_median_short <- foreach(x = res_list, .packages = "FLCore",
-                                 .combine = "c") %dopar% {
-  median(window(catch(x@stock), start = 2019, end = 2023))
-}
-stats_new$catch_median_medium <- foreach(x = res_list, .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  median(window(catch(x@stock), start = 2024, end = 2028))
-}
-### risks
-stats_new$risk1_full <- foreach(x = res_list, 
-                                Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2019) < Blim)
-}
-stats_new$risk1_long <- foreach(x = res_list, 
-                                Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2029) < Blim)
-}
-stats_new$risk1_short <- foreach(x = res_list, 
-                                 Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                 .packages = "FLCore",
-                                 .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2019, end = 2023) < Blim)
-}
-stats_new$risk1_medium <- foreach(x = res_list, 
-                                  Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                  .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  mean(window(ssb(x@stock), start = 2024, end = 2028) < Blim)
-}
-stats_new$risk3_long <- foreach(x = res_list, 
-                                Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2029) < Blim))
-}
-stats_new$risk3_short <- foreach(x = res_list, 
-                                 Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                 .packages = "FLCore",
-                                 .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2019, end = 2023) < Blim))
-}
-stats_new$risk3_medium <- foreach(x = res_list, 
-                                  Blim = stats_new$Blim[seq(nrow(stats_new))],
-                                  .packages = "FLCore",
-                                  .combine = "c") %dopar% {
-  max(iterMeans(window(ssb(x@stock), start = 2024, end = 2028) < Blim))
-}
-### inter-annual variation of catch
-stats_new$iav_long <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  iav(object = catch(window(stock(x), start = 2028)), summary_all = median)
-}
-stats_new$iav_short <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  iav(object = catch(window(stock(x), start = 2018, end = 2023)), 
-      summary_all = median)
-}
-stats_new$iav_medium <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  iav(object = catch(window(stock(x), start = 2023, end = 2028)), 
-      summary_all = median)
-}
-### inter-annual variation of TAC
-stats_new$iavTAC_long <- foreach(x = res_list, .packages = "FLCore",
-                              .combine = "c") %dopar% {
-  iav(object = window(x@tracking["metric.is"], start = 2028, end = 2037), 
-      summary_all = median)
-}
-stats_new$iavTAC_short <- foreach(x = res_list, .packages = "FLCore",
-                               .combine = "c") %dopar% {
-  iav(object = window(x@tracking["metric.is"], start = 2018, end = 2022), 
-      summary_all = median)
-}
-stats_new$iavTAC_medium <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  iav(object = window(x@tracking["metric.is"], start = 2023, end = 2027), 
-      summary_all = median)
-}
-### SSB
-stats_new$ssb_median_long <- foreach(x = res_list, .packages = "FLCore",
-                                       .combine = "c") %dopar% {
-  median(window(ssb(x@stock), start = 2029))
-}
-stats_new$ssb_median_short <- foreach(x = res_list, .packages = "FLCore",
-                                        .combine = "c") %dopar% {
-  median(window(ssb(x@stock), start = 2019, end = 2023))
-}
-stats_new$ssb_median_medium <- foreach(x = res_list, .packages = "FLCore",
-                                         .combine = "c") %dopar% {
-  median(window(ssb(x@stock), start = 2024, end = 2028))
-}
-### fbar
-stats_new$fbar_median_long <- foreach(x = res_list, .packages = "FLCore",
-                                     .combine = "c") %dopar% {
-  median(window(fbar(x@stock), start = 2029))
-}
-stats_new$fbar_median_short <- foreach(x = res_list, .packages = "FLCore",
-                                      .combine = "c") %dopar% {
-  median(window(fbar(x@stock), start = 2019, end = 2023))
-}
-stats_new$fbar_median_medium <- foreach(x = res_list, .packages = "FLCore",
-                                       .combine = "c") %dopar% {
-  median(window(fbar(x@stock), start = 2024, end = 2028))
-}
-### time to recovery
-MSYBtrigger <- 150000
-stats_new$recovery_proportion <- foreach(x = res_list, .packages = "FLCore",
-                                   .combine = "c") %dopar% {
-  mean(apply(window(ssb(x@stock), start = 2019) >= MSYBtrigger, 6, max))
-}
-stats_new$recovery_time <- foreach(x = res_list, .packages = "FLCore",
-                                   .combine = "c") %dopar% {
-  median(apply(window(ssb(x@stock), start = 2019)@.Data >= MSYBtrigger, 6, 
-               function(x) {
-    if (any(x)) {
-      which(x)[1]
-    } else {
-      Inf
-    }
-  }))
-}
-### SAM convergence
-stats_new$conv_failed <- foreach(x = res_list, .packages = "FLCore",
-                                .combine = "c") %dopar% {
-  sum(x@tracking["conv.est", ac(2018:2037)] != 0)
-}
-all(stats_new$conv_failed == 0)
-### check F maxed (2)
-stats_new$F_maxed <- foreach(x = res_list, .packages = "FLCore",
-                                 .combine = "c") %dopar% {
-  sum(window(fbar(stock(x)), start = 2019) >= 2)
-}
-# pos <- which(stats_new$F_maxed != 0)
-# stats_new[pos, ]
-# plot(stock(res_list[[pos]]))
-# pos_iter <- which(apply(fbar(stock(res_list[[pos]])), c(1, 6), max) >= 2)
-# plot(stock(res_list[[pos]])[,,,,, pos_iter])
-### F maxed in THREE scenarios, 
-### in each of them in ONE iteration and ONE time only
-### HCR B, Btrigger = 110000, Ftrgt = 0.5, iteration 29
-### HCR AD, Btrigger = 170000, Ftrgt = 0.5, iteration 442
-### HCR AD, Btrigger = 190000, Ftrgt = 0.5, iteration 442
-### HCR BE, Btrigger = 190000, Ftrgt = 0.5, iteration 442
-### HCR CE, Btrigger = 190000, Ftrgt = 0.5, iteration 442
-### OM_alt2 HCR A, Btrigger = 190000, Ftrgt = 0.4, iteration 756
-### full A grid
-### Btrigger = 110000/120000/130000 & Ftrgt = 0.50
-### Btrigger = 120000 & Ftrgt = 0.49
-### always only once in one iteration
-
-### proportion where MP is on slope
-stats_new$slope_long <- foreach(x = res_list, Ftrgt = stats_new$Ftrgt,
-                                .packages = "FLCore", .combine = "c") %dopar% {
-  mean(c(window(x@tracking["metric.hcr"], start = 2028) < 
-           (Ftrgt * (1 - 1e-16))), 
-       na.rm = TRUE)
-}
-stats_new$slope_medium <- foreach(x = res_list, Ftrgt = stats_new$Ftrgt,
-                                .packages = "FLCore", .combine = "c") %dopar% {
-  mean(c(window(x@tracking["metric.hcr"], start = 2023, end = 2027) < 
-           (Ftrgt * (1 - 1e-16))), 
-       na.rm = TRUE)
-}
-stats_new$slope_short <- foreach(x = res_list, Ftrgt = stats_new$Ftrgt,
-                                .packages = "FLCore", .combine = "c") %dopar% {
-  mean(c(window(x@tracking["metric.hcr"], start = 2018, end = 2022) < 
-           (Ftrgt * (1 - 1e-16))), 
-       na.rm = TRUE)
-}
-
-stats <- rbind(stats, stats_new)
-stats <- stats[order(stats$file), ]
-saveRDS(object = stats, file = paste0(path_res, "stats.rds"))
-write.csv(x = stats, file = paste0("output/stats.csv"), row.names = FALSE)
-
-### ------------------------------------------------------------------------ ###
-### load full A grid ####
-### ------------------------------------------------------------------------ ###
-stats <- readRDS(paste0(path_res, "stats.rds"))
-stats_POD <- readRDS(paste0(path_res, "POD/stats.rds"))
-stats_POD <- stats_POD %>% filter(!file %in% stats$file)
-stats_POD <- stats_POD[!grepl(x = stats_POD$file, pattern = "*2.rds"), ]
-stats_POD$HPC <- "POD"
-
-# nrow(stats) + nrow(stats_POD)
-stats_full <- full_join(stats, stats_POD)
-stats_full <- stats_full[order(stats_full$file), ]
-stats_full$HPC <- ifelse(is.na(stats_full$HPC), "UEA", stats_full$HPC)
-# nrow(stats_full)
-saveRDS(object = stats_full, file = paste0(path_res, "stats_full.rds"))
-write.csv(x = stats_full, file = paste0("output/stats_full.csv"), 
-          row.names = FALSE)
-stats_full <- readRDS(paste0(path_res, "stats_full.rds"))
-
-### ------------------------------------------------------------------------ ###
-### plot ####
-### ------------------------------------------------------------------------ ###
-
-
-### plot function
-grid <- function(dat, HCR = "A",
-                 time = c("long", "short", "medium"),
-                 add_risk1 = FALSE, highlight_max = FALSE,
-                 add_slope = FALSE) {
-  
-  ### catch
-  dat$catch <- dat[, paste0("catch_median_", time)]
-  dat$risk <- dat[, paste0("risk3_", time)]
-  dat$iav <- dat[, paste0("iav_", time)]
-  dat$ssb <- dat[, paste0("ssb_median_", time)]
-  dat$risk1 <- dat[, paste0("risk1_", time)]
-  dat$Btrigger <- dat$Btrigger / 1000
-  dat$slope <- dat[, paste0("slope_", time)]
-  ### find yield maximum
-  dat_max <- dat %>% 
-    filter(risk <= 0.05) %>%
-    filter(catch == max(catch)) %>%
-    select(Ftrgt, Btrigger)
-  # p1 <- ggplot(data = dat, 
-  #               aes(x = Btrigger, y = Ftrgt, fill = catch)) +
-  #   geom_raster() +
-  #   scale_fill_gradient(paste0(time, "-term\ncatch (median)"), low = "red", 
-  #                       high = "green") +
-  #   geom_text(aes(label = round(catch), colour = risk <= 0.05),
-  #             size = 2) +
-  #   scale_colour_manual("risk <= 0.05", 
-  #                       values = c("FALSE" = "red", "TRUE" = "black")) +
-  #   theme_bw()
-  p1 <- ggplot() +
-    geom_raster(data = dat %>% 
-                  filter(risk <= 0.05) %>%
-                  filter(catch >= 0.95 * max(catch)),
-                aes(x = Btrigger, y = Ftrgt, fill = catch)) +
-    scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
-                        high = "green") +
-    geom_text(data = dat, 
-              aes(x = Btrigger, y = Ftrgt, 
-                  label = round(catch), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05", 
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw() +
-    facet_wrap(~ paste0("median ", time, "-term catch [t]")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  ### risk
-  p2 <- ggplot(data = dat, 
-                aes(x = Btrigger, y = Ftrgt)) +
-    geom_raster(aes(fill = risk), alpha = 0.75) +
-    scale_fill_gradient(paste0(time, "-term\nrisk 3"), 
-                        low = "green", high = "red") +
-    geom_text(aes(label = round(risk, 3), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05", 
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw() +
-    facet_wrap(~ paste0(time, "-term risk 3")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  ### iav
-  p3 <- ggplot(data = dat, 
-                aes(x = Btrigger, y = Ftrgt)) +
-    geom_raster(aes(fill = iav)) +
-    geom_text(aes(label = round(iav, 3), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05",
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    scale_fill_gradient(paste0("median\n", time,
-                               "-term\ninter-annual\ncatch variability"),
-                        low = "green", high = "red") +
-    theme_bw() +
-    facet_wrap(~ paste0("median ", time, 
-                        "-term inter-annual\ catch variability")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  ### SSB
-  p4 <- ggplot(data = dat, 
-               aes(x = Btrigger, y = Ftrgt)) +
-    geom_raster(aes(fill = ssb), alpha = 0.5) +
-    geom_text(aes(label = round(ssb), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05",
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    scale_fill_gradient(paste0("median\n", time,
-                               "-term\nSSB [t]"),
-                        low = "red", high = "green") +
-    theme_bw() +
-    facet_wrap(~ paste0("median ", time, 
-                        "-term SSB [t]")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  ### risk1
-  p5 <- ggplot(data = dat, 
-               aes(x = Btrigger, y = Ftrgt)) +
-    geom_raster(aes(fill = risk1), alpha = 0.75) +
-    scale_fill_gradient(paste0(time, "-term\nrisk 1"), 
-                        low = "green", high = "red") +
-    geom_text(aes(label = round(risk1, 3), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05", 
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw() +
-    facet_wrap(~ paste0(time, "-term risk 1")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  p6 <- ggplot(data = dat, 
-               aes(x = Btrigger, y = Ftrgt)) +
-    geom_raster(aes(fill = slope), alpha = 0.75) +
-    scale_fill_gradient(paste0(time, "-term\nproportion on\nHCR slope"), 
-                        low = "green", high = "red") +
-    geom_text(aes(label = round(slope, 3), colour = risk <= 0.05),
-              size = 2) +
-    scale_colour_manual("risk <= 0.05", 
-                        values = c("FALSE" = "red", "TRUE" = "black")) +
-    theme_bw() +
-    facet_wrap(~ paste0(time, "-term proportion on HCR slope")) +
-    scale_x_continuous(breaks = sort(unique(dat$Btrigger))) +
-    labs(x = expression(B[trigger]~"[1000t]"),
-         y = expression(F[trgt]))
-  ### list with plots
-  ps <- list(p1, p2, p3, p4, p5, p6)[c(rep(TRUE, 4), add_risk1, add_slope)]
-  ### highlight maximum
-  if (isTRUE(highlight_max)) {
-    p_add <- geom_tile(data = dat_max, aes(x = Btrigger, y = Ftrgt),
-                width = 10, height = 0.01, linetype = "solid",
-                alpha = 0, colour = "black", size = 0.3)
-    ps <- lapply(ps, function(x) {x + p_add})
-  }
-  ps$align = "hv"
-  do.call(plot_grid, ps)
-  
-}
-
-### A
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4" &
-                HPC == "UEA"), 
-     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_A_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4" &
-                HPC == "UEA"), 
-     HCR = "A", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_A_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4" &
-                HPC == "UEA"), 
-     HCR = "A", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_A_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-### B
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_B_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_B_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_B_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-### C
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_C_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_C_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_C_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-### AD
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_AD_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_AD_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "A" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_AD_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### BE
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_BE_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_BE_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "B" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "B", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_BE_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### CE
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_CE_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_CE_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats %>%
-       filter(HCR == "C" & BB == TRUE & TACconstr == TRUE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "C", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_CE_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-### A - full grid
-grid(dat = stats_full %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "long", add_risk1 = FALSE, highlight_max = TRUE)
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_long.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats_full %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "medium")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_medium.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-grid(dat = stats_full %>%
-       filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
-                Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4"), 
-     HCR = "A", time = "short")
-ggsave(filename = "output/runs/cod4/1000_20/plots/grid/grid_full_A_short.png", 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-# ggsave(filename = "output/runs/cod4/1000_20/plots/grid/title_page.png", 
-#        width = 20, height = 15, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### plot some runs ####
-### ------------------------------------------------------------------------ ###
-### function for plotting
-plot_stk <- function(stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31,
-                     Btrigger_ = 150000, TACconstr_ = FALSE, BB_ = FALSE,
-                     probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
-                     path_out = "output/runs/cod4/1000_20/",
-                     path_in = "input/cod4/1000_20/", file_in = "base_run.rds",
-                     path_res = "output/runs/cod4/1000_20/plots/stock_plots/",
-                     save_plot = TRUE,
-                     get_history = TRUE, overwrite_catch_history = FALSE,
-                     yr_start = 2018.5,
-                     Blim = 107000, MSYBtrigger = 150000,
-                     Flim = 0.54, Fmsy = 0.31,
-                     plot_iter = FALSE, iters_plot = 0,
-                     width = 30, height = 20) {
-  
-  ### get scenario
-  stats_i <- stats %>% filter(OM == OM_ & HCR == HCR_ & Ftrgt == Ftrgt_ & 
-                                Btrigger == Btrigger_, TACconstr == TACconstr_ &
-                                BB == BB_)
-  ### load MSE results
-  res_i <- readRDS(paste0(path_out, stats_i$file))
-  
-  ### load stock history
-  if (isTRUE(get_history)) {
-    hist_i <- readRDS(paste0(path_in, file_in))
-    stk_i <- hist_i$om@stock
-    stk_i[, dimnames(res_i@stock)$year] <- res_i@stock
-    ### overwrite catch history
-    if (isTRUE(overwrite_catch_history)) {
-      catch_hist <- readRDS(paste0(path_in, "catch_n.rds"))
-      catch.n(stk_i)[, dimnames(catch_hist)$year] <- catch_hist
-      catch(stk_i) <- computeCatch(stk_i)
-    }
-  }
-  
-  ### plot
-  if (!isTRUE(plot_iter)) {
-    ### plot percentiles
-    p <- plot(stk_i, probs = probs, iter = iters_plot) +
-      xlab("year") + geom_vline(xintercept = yr_start) +
-        geom_hline(data = data.frame(qname = "SSB", data = Blim),
-                   aes(yintercept = data), linetype = "dashed") +
-        geom_hline(data = data.frame(qname = "SSB", data = MSYBtrigger),
-                   aes(yintercept = data), linetype = "solid") +
-        geom_hline(data = data.frame(qname = "F", data = Flim),
-                   aes(yintercept = data), linetype = "dashed") +
-        geom_hline(data = data.frame(qname = "F", data = Fmsy),
-                   aes(yintercept = data), linetype = "solid") +
-        theme_bw() + ylim(0, NA) + theme(legend.position = 0) + 
-      facet_wrap(~ qname, ncol = 1, strip.position = "right", scales = "free_y",
-                 labeller = as_labeller(c(
-                   "Rec" = "Rec [1000]",
-                   "SSB" = "SSB [t]",
-                   "Catch" = "Catch [t]",
-                   "F" = paste0("F (ages ", paste(range(stk_i)["minfbar"], 
-                                      range(stk_i)["maxfbar"], sep = "-"),
-                                ")"))))
-  } else {
-    ### plot iterations
-    stk_df <- as.data.frame(FLQuants(`Rec [1000]` = rec(stk_i),
-                                      `SSB [t]` = ssb(stk_i),
-                                      `Catch [t]` = catch(stk_i),
-                                      `F` = fbar(stk_i)))
-    p <- ggplot(data = stk_df, 
-           aes(x = year, y = data, group = iter)) +
-      geom_line(alpha = 0.025) +
-      facet_wrap(~ qname, ncol = 1, strip.position = "right",
-                 scale = "free_y") +
-      theme_bw() +
-      ylim(c(0, NA)) + labs(y = "") + 
-      geom_vline(xintercept = yr_start) +
-      geom_hline(data = data.frame(qname = "SSB [t]", data = Blim),
-                 aes(yintercept = data), linetype = "dashed") +
-      geom_hline(data = data.frame(qname = "SSB [t]", data = MSYBtrigger),
-                 aes(yintercept = data), linetype = "solid") +
-      geom_hline(data = data.frame(qname = "F", data = Flim),
-                 aes(yintercept = data), linetype = "dashed") +
-      geom_hline(data = data.frame(qname = "F", data = Fmsy),
-                 aes(yintercept = data), linetype = "solid")
-    
-  }
-  print(p)
-  ### save plot
-  if (isTRUE(save_plot)) {
-    filename <- paste0(path_res, gsub(x = stats_i$file, pattern = ".rds",
-                                      replacement = ""), 
-                       ifelse(isTRUE(iters_plot == 0), "", "_iters"),
-                       ".png")
-    ggsave(filename = filename,
-           width = width, height = height, units = "cm", dpi = 300, 
-           type = "cairo")
-    
-  }
-
-}
-
-### base OM
-### current HCR
-plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
-         Btrigger_ = 150000, TACconstr_ = FALSE, BB_ = FALSE, 
-         overwrite_catch_history = TRUE, iters_plot = 1:5)
-### A, B, C, AD, BE, CE
-combs <- data.frame(name = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"),
-                    HCR = c("F0", "A", "A", "B", "C", "A", "B", "C"),
-                    BB = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
-                    TACconstr = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
-                    Btrigger = c(0, 150000, 170000, 160000, 170000, 190000,
-                                 130000, 140000),
-                    Ftrgt = c(0, 0.31, 0.38, 0.38, 0.38, 0.40, 0.36, 0.36))
-combs <- rbind(cbind(combs, OM = "cod4"),
-               cbind(combs, OM = "cod4_alt1"),
-               cbind(combs, OM = "cod4_alt2"),
-               cbind(combs, OM = "cod4_alt3"))
-combs <- combs[-c(10, 18, 26), ]
-lapply(X = split(combs, seq(nrow(combs))), FUN = function(i) {
-  plot_stk(stats = stats, OM_ = i$OM, HCR_ = i$HCR, Ftrgt_ = i$Ftrgt, 
-           Btrigger_ = i$Btrigger, TACconstr_ = i$TACconstr, BB_ = i$BB, 
-           overwrite_catch_history = TRUE,
-           path_in = paste0("input/", i$OM, "/1000_20/"))
-})
-### plot with first five iterations
-lapply(X = split(combs, seq(nrow(combs))), FUN = function(i) {
-  plot_stk(stats = stats, OM_ = i$OM, HCR_ = i$HCR, Ftrgt_ = i$Ftrgt, 
-           Btrigger_ = i$Btrigger, TACconstr_ = i$TACconstr, BB_ = i$BB, 
-           overwrite_catch_history = TRUE, iters_plot = 1:5,
-           path_in = paste0("input/", i$OM, "/1000_20/"))
-})
-
-### add plot for A*D
-plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
-         Btrigger_ = 150000, TACconstr_ = TRUE, BB_ = TRUE, 
-         overwrite_catch_history = TRUE,
-         path_in = paste0("input/cod4/1000_20/"))
-plot_stk(stats = stats, OM_ = "cod4", HCR_ = "A", Ftrgt_ = 0.31, 
-         Btrigger_ = 150000, TACconstr_ = TRUE, BB_ = TRUE, 
-         overwrite_catch_history = TRUE, iters_plot = 1:5,
-         path_in = paste0("input/cod4/1000_20/"))
-
-### ------------------------------------------------------------------------ ###
-### F=0 plot ####
-### ------------------------------------------------------------------------ ###
-
-stkF0 <- readRDS(file = "input/cod4/10000_100/data_F0.RData")$om@stock
-stkF0_res <- readRDS("output/runs/cod4/F0_10000_100.rds")@stock
-
-catch_n <- readRDS("input/cod4/10000_100/catch_n.rds")
-catch.n(stkF0)[dimnames(catch_n)$age, dimnames(catch_n)$year] <- 
-  catch_n
-catch(stkF0) <- computeCatch(stkF0)
-
-stkF0[, ac(2018:2118)] <- stkF0_res[, ac(2018:2118)]
-plot(stkF0, probs = c(0.05, 0.25, 0.5, 0.75, 0.95)) +
-  xlab("year") + geom_vline(xintercept = 2018.5) +
-  geom_hline(data = data.frame(qname = "SSB", data = 107000),
-             aes(yintercept = data), linetype = "dashed") +
-  geom_hline(data = data.frame(qname = "SSB", data = 150000),
-             aes(yintercept = data), linetype = "solid") +
-  geom_hline(data = data.frame(qname = "F", data = 0.54),
-             aes(yintercept = data), linetype = "dashed") +
-  geom_hline(data = data.frame(qname = "F", data = 0.31),
-             aes(yintercept = data), linetype = "solid") +
-  theme_bw() #+
-  # geom_blank(data = as.data.frame(FLQuants(`Rec` = rec(stkF0),
-  #                                          `SSB` = ssb(stkF0),
-  #                                          `Catch` = catch(stkF0),
-  #                                          `F` = fbar(stkF0))), 
-  #            aes(x = year, y = data, group = iter))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
-                         "stk_F0_10000iters.png"),
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-### iterations
-stkF0_df <- as.data.frame(FLQuants(`Rec [1000]` = rec(stkF0),
-                                  `SSB [t]` = ssb(stkF0),
-                                  `Catch [t]` = catch(stkF0),
-                                  `F` = fbar(stkF0)))
-ggplot(data = stkF0_df[stkF0_df$iter %in% 1:1000, ], 
-       aes(x = year, y = data, group = iter)) +
-  geom_line(alpha = 0.025) +
-  facet_wrap(~ qname, ncol = 1, strip.position = "right",
-             scale = "free_y") +
-  theme_bw() +
-  ylim(c(0, NA)) + labs(y = "") + 
-  geom_vline(xintercept = 2018.5) +
-  geom_hline(data = data.frame(qname = "SSB [t]", data = 107000),
-             aes(yintercept = data), linetype = "dashed") +
-  geom_hline(data = data.frame(qname = "SSB [t]", data = 150000),
-             aes(yintercept = data), linetype = "solid") +
-  geom_hline(data = data.frame(qname = "F", data = 0.54),
-             aes(yintercept = data), linetype = "dashed") +
-  geom_hline(data = data.frame(qname = "F", data = 0.31),
-             aes(yintercept = data), linetype = "solid")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
-                         "stk_F0_10000iters_iters.png"),
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### extrapolate 5% risk line ####
-### ------------------------------------------------------------------------ ###
-
-# df_risks <- data.frame(Btrigger = c(seq(from = 110000, to = 190000, 
-#                                         by = 10000)),
-#                        Ftrgt = c(0.355, 0.355, 0.365, 0.375, 0.375, 0.385,
-#                                  0.395, 0.405, 0.425))
-# 
-# lm_risks <- lm(formula = Ftrgt ~ Btrigger, data = tail(df_risks, 5))
-# plot(Ftrgt ~ Btrigger, data = df_risks, 
-#      xlim = c(110000, 300000), ylim = c(0.3, 0.6))
-# abline(lm_risks)
-
-
-### ------------------------------------------------------------------------ ###
-### summary plots: compare HCR options ####
-### ------------------------------------------------------------------------ ###
-
-### select maximum yield combinations
-combs <- data.frame(name = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"),
-                    OM = c("cod4"),
-                    HCR = c("F0", "A", "A", "B", "C", "A", "B", "C"),
-                    BB = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
-                    TACconstr = c(rep(FALSE, 5), TRUE, TRUE, TRUE),
-                    Btrigger = c(0, 150000, 170000, 160000, 170000, 190000, 130000,
-                                 140000),
-                    Ftrgt = c(0, 0.31, 0.38, 0.38, 0.38, 0.40, 0.36, 0.36),
-                    scenario = 0)
-combs <- merge(combs, stats, all.x = TRUE)
-combs2 <- gather(data = combs, key = "key", value = "value",
-                catch_median_long, risk3_long, iav_long,
-                ssb_median_long, recovery_proportion, recovery_time)
-combs2$name <- factor(combs2$name, levels = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"))
-
-ggplot(data = combs2, 
-       mapping = aes(x = name, y = value, group = name)) +
-  geom_bar(stat = "identity") +
-  facet_wrap(~ key, scales = "free_y") +
-  theme_bw()
-
-### load entire distribution for stats
-stats_full <- function(data) {
-  combs_full <- foreach(i = split(data, seq(nrow(data))), 
-                      .packages = "FLCore", .combine = rbind) %dopar% {
-                        
-    stk_i <- readRDS(paste0("output/runs/cod4/1000_20/", i$file))
-    MSYBtrigger <- 150000
-    Blim <- ifelse(!i$OM == "cod4_alt2", 107000, 110000)
-    res <- rbind(
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "catch_long",
-               value = c(window(catch(stk_i@stock), start = 2029))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "catch_medium",
-               value = c(window(catch(stk_i@stock), start = 2024, end = 2028))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "catch_short",
-               value = c(window(catch(stk_i@stock), start = 2019, end = 2023))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk1_long",
-               value = mean(window(ssb(stk_i@stock), start = 2029) < Blim)),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk1_medium",
-               value = mean(window(ssb(stk_i@stock), 
-                                   start = 2024, end = 2028) < Blim)),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk1_short",
-               value = mean(window(ssb(stk_i@stock), 
-                                   start = 2019, end = 2023) < Blim)),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk3_long",
-               value = max(iterMeans(window(ssb(stk_i@stock), 
-                                            start = 2029) < Blim))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk3_medium",
-               value = max(iterMeans(window(ssb(stk_i@stock), 
-                                            start = 2024, end = 2028) < Blim))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "risk3_short",
-               value = max(iterMeans(window(ssb(stk_i@stock), 
-                                            start = 2019, end = 2023) < Blim))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "iav_long",
-               value = c(iav(object = catch(window(stock(stk_i), start = 2028))))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "iav_medium",
-               value = c(iav(object = catch(window(stock(stk_i), 
-                                                   start = 2023, end = 2028))))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "iav_short",
-               value = c(iav(object = catch(window(stock(stk_i), 
-                                                   start = 2018, end = 2023))))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "ssb_long",
-               value = c(window(ssb(stk_i@stock), start = 2029))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "ssb_medium",
-               value = c(window(ssb(stk_i@stock), start = 2024, end = 2028))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "ssb_short",
-               value = c(window(ssb(stk_i@stock), start = 2019, end = 2023))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "recovery_proportion",
-               value = mean(apply(window(ssb(stk_i@stock), 
-                                         start = 2019) >= MSYBtrigger, 6, max))),
-    data.frame(name = i$name, scenario = i$scenario,
-               key = "recovery_time",
-               value = c(apply(window(ssb(stk_i@stock), 
-                                      start = 2019)@.Data >= MSYBtrigger, 6,
-                               function(x) {
-                                 if (any(x)) {which(x)[1]} else {Inf}})))
-  )
-  if (i$HCR == "F0") {
-    res$value[res$key %in% c("catch_long", "catch_medium", "catch_short",
-                             "iav_long", "iav_medium", "iav_short")] <- 0
-  }
-  res <- merge(res, i[, c("name", "OM", "HCR", "BB", "TACconstr", "Btrigger",
-                          "Ftrgt")])
-  return(res)
-  }
-  combs_full$name <- factor(combs_full$name, 
-                            levels = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"))
-  return(combs_full)
-}
-
-### base OM
-combs_base <- stats_full(data = combs)
-ggplot(data = combs_base, 
-       mapping = aes(x = name, y = value, group = name)) +
-  #geom_bar(stat = "identity") +
-  geom_boxplot() + 
-  facet_wrap(~ key, scales = "free_y") +
-  theme_bw() +
-  ylim(0, NA)
-
-### get median for option A*
-combs_base <- left_join(combs_base, 
-                         combs_base %>%
-  group_by(key, OM, name) %>%
-  summarise(value_median = median(value)) %>%
-  filter(name == "A*") %>%
-    select(-name))
-p_catch_long <- ggplot(data = combs_base[combs_base$key == "catch_long", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  labs(x = "", y = "long-term catch [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
-p_catch_medium <- ggplot(data = combs_base[combs_base$key == "catch_medium", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  labs(x = "", y = "medium-term catch [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
-p_catch_short <- ggplot(data = combs_base[combs_base$key == "catch_short", ], 
-                         mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  labs(x = "", y = "short-term catch [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1))
-p_risk1_long <- ggplot(data = combs_base[combs_base$key == "risk1_long", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") +
-  geom_blank(data = combs_base[combs_base$key == "risk3_long", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 1")
-p_risk1_medium <- ggplot(data = combs_base[combs_base$key == "risk1_medium", ], 
-                         mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_blank(data = combs_base[combs_base$key == "risk3_medium", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 1")
-p_risk1_short <- ggplot(data = combs_base[combs_base$key == "risk1_short", ], 
-                        mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_blank(data = combs_base[combs_base$key == "risk3_short", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 1")
-p_risk3_long <- ggplot(data = combs_base[combs_base$key == "risk3_long", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_blank(data = combs_base[combs_base$key == "risk1_long", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 3")
-p_risk3_medium <- ggplot(data = combs_base[combs_base$key == "risk3_medium", ], 
-                         mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_blank(data = combs_base[combs_base$key == "risk1_medium", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 3")
-p_risk3_short <- ggplot(data = combs_base[combs_base$key == "risk3_short", ], 
-                        mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_blank(data = combs_base[combs_base$key == "risk1_short", ]) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 3")
-p_iav_long <- ggplot(data = combs_base[combs_base$key == "iav_long", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 1)) + 
-  labs(x = "", y = "long-term inter-annual catch variability")
-p_iav_medium <- ggplot(data = combs_base[combs_base$key == "iav_medium", ], 
-                         mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 1)) + 
-  labs(x = "", y = "medium-term inter-annual catch variability")
-p_iav_short <- ggplot(data = combs_base[combs_base$key == "iav_short", ], 
-                        mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 1.2)) + 
-  labs(x = "", y = "short-term inter-annual catch variability")
-p_ssb_long <- ggplot(data = combs_base[combs_base$key == "ssb_long", ], 
-                     mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 1.2e+06)) +
-  labs(x = "", y = "long-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2))
-p_ssb_medium <- ggplot(data = combs_base[combs_base$key == "ssb_medium", ], 
-                       mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 0.9e+06)) +
-  labs(x = "", y = "medium-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
-                     limits = c(0, NA))
-p_ssb_short <- ggplot(data = combs_base[combs_base$key == "ssb_short", ], 
-                      mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  coord_cartesian(ylim = c(0, 0.65e+06)) +
-  labs(x = "", y = "short-term SSB [t]") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
-                     limits = c(0, NA))
-p_recovery_proportion <- 
-  ggplot(data = combs_base[combs_base$key == "recovery_proportion", ], 
-         mapping = aes(x = name, y = value)) +
-  geom_bar(stat = "identity", position = "dodge", colour = "black") + 
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery proportion")
-p_recovery_time <- 
-  ggplot(data = combs_base[combs_base$key == "recovery_time", ], 
-         mapping = aes(x = name, y = value)) +
-  geom_boxplot() + theme_bw() + ylim(0, NA) +
-  geom_hline(aes(yintercept = value_median), colour = "red", alpha = 0.5) +
-  labs(x = "", y = "recovery time [years]")
-
-plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long, p_ssb_long,
-          align = "hv")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats/", 
-                         "summary_baseOM_long.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(p_catch_medium, p_risk1_medium, p_risk3_medium, p_iav_medium, 
-          p_ssb_medium,
-          align = "hv")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats/", 
-                         "summary_baseOM_medium.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(p_catch_short, p_risk1_short, p_risk3_short, p_iav_short, p_ssb_short,
-          align = "hv")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats/", 
-                         "summary_baseOM_short.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(p_recovery_proportion, p_recovery_time,
-          align = "hv")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats/", 
-                         "summary_baseOM_recovery.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-### ------------------------------------------------------------------------ ###
-### summary plots: base OM, additional scenarios around maximum yield ####
-### ------------------------------------------------------------------------ ###
-
-### select maximum yield combinations
-### add: 0.9 & 1.1 * Ftrgt
-###      Fmsylower, Fmsyupper
-combs <- data.frame(name = rep(c("A", "B", "C", "AD", "BE", "CE"), each = 5),
-                    HCR = rep(c("A", "B", "C", "A", "B", "C"), each = 5),
-                    BB = rep(c(rep(FALSE, 3), rep(TRUE, 3)), each = 5),
-                    TACconstr = rep(c(rep(FALSE, 3), rep(TRUE, 3)), each = 5),
-                    Btrigger = rep(c(170000, 160000, 170000, 190000, 130000,
-                                     140000), each = 5),
-                    Ftrgt = c(0.38 * c(0.9, 1, 1.1), 0.198, 0.46,
-                              0.38 * c(0.9, 1, 1.1), 0.198, 0.46,
-                              0.38 * c(0.9, 1, 1.1), 0.198, 0.46,
-                              0.40 * c(0.9, 1, 1.1), 0.198, 0.46,
-                              0.36 * c(0.9, 1, 1.1), 0.198, 0.46,
-                              0.36 * c(0.9, 1, 1.1), 0.198, 0.46),
-                    scenario = c("0.9*Ftrgt", "Ftrgt", "1.1*Ftrgt",
-                                 "Fmsylower", "Fmsyupper"),
-                    OM = "cod4")
-combs <- merge(combs, stats)
-combs_dat <- stats_full(data = combs)
-combs_dat$scenario <- factor(combs_dat$scenario, 
-                             levels = c("Fmsylower", "0.9*Ftrgt", "Ftrgt", 
-                                        "1.1*Ftrgt", "Fmsyupper"))
-ggplot(data = combs_dat, 
-       mapping = aes(x = name, y = value, group = interaction(scenario, name), 
-                     colour = scenario)) +
-  geom_boxplot() + 
-  facet_wrap(~ key, scales = "free_y") +
-  theme_bw() +
-  ylim(0, NA)
-
-p_catch_long <- ggplot(data = combs_dat[combs_dat$key == "catch_long", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term catch [t]")
-p_catch_medium <- ggplot(data = combs_dat[combs_dat$key == "catch_medium", ], 
-                         mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term catch [t]")
-p_catch_short <- ggplot(data = combs_dat[combs_dat$key == "catch_short", ], 
-                        mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term catch [t]")
-p_risk1_long <- ggplot(data = combs_dat[combs_dat$key == "risk1_long", ], 
-                       mapping = aes(x = name, y = value, fill = scenario,
-                                     colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_long", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 1")
-p_risk1_medium <- ggplot(data = combs_dat[combs_dat$key == "risk1_medium", ], 
-                         mapping = aes(x = name, y = value, fill = scenario,
-                                       colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_medium", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 1")
-p_risk1_short <- ggplot(data = combs_dat[combs_dat$key == "risk1_short", ], 
-                        mapping = aes(x = name, y = value, fill = scenario,
-                                      colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_short", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 1")
-p_risk3_long <- ggplot(data = combs_dat[combs_dat$key == "risk3_long", ], 
-                       mapping = aes(x = name, y = value, fill = scenario,
-                                     colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_long", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 3")
-p_risk3_medium <- ggplot(data = combs_dat[combs_dat$key == "risk3_medium", ], 
-                         mapping = aes(x = name, y = value, fill = scenario,
-                                       colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_medium", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 3")
-p_risk3_short <- ggplot(data = combs_dat[combs_dat$key == "risk3_short", ], 
-                        mapping = aes(x = name, y = value, fill = scenario,
-                                      colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_short", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 3")
-p_iav_long <- ggplot(data = combs_dat[combs_dat$key == "iav_long", ], 
-                     mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1.3)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term inter-annual catch variability")
-p_iav_medium <- ggplot(data = combs_dat[combs_dat$key == "iav_medium", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1.3)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term inter-annual catch variability")
-p_iav_short <- ggplot(data = combs_dat[combs_dat$key == "iav_short", ], 
-                      mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1.5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term inter-annual catch variability")
-p_ssb_long <- ggplot(data = combs_dat[combs_dat$key == "ssb_long", ], 
-                     mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 5e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term SSB [t]") +
-  theme(legend.direction = "horizontal")
-p_ssb_medium <- ggplot(data = combs_dat[combs_dat$key == "ssb_medium", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  coord_cartesian(ylim = c(0, 5e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term SSB [t]") +
-  theme(legend.direction = "horizontal")
-p_ssb_short <- ggplot(data = combs_dat[combs_dat$key == "ssb_short", ], 
-                      mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 4.5e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term SSB [t]") +
-  theme(legend.direction = "horizontal") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
-                     limits = c(0, NA))
-p_recovery_proportion <- 
-  ggplot(data = combs_dat[combs_dat$key == "recovery_proportion", ], 
-         mapping = aes(x = name, y = value, fill = scenario, colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity",
-           position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery proportion")
-p_recovery_time <- 
-  ggplot(data = combs_dat[combs_dat$key == "recovery_time", ], 
-         mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery time [years]")
-
-plot_grid(plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long,
-                    p_ssb_long + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_long), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats_combs/", 
-                         "baseOM_combs_long.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_medium, p_risk1_medium, p_risk3_medium, p_iav_medium,
-                    p_ssb_medium + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_medium), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats_combs/", 
-                         "baseOM_combs_medium.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_short, p_risk1_short, p_risk3_short, p_iav_short,
-                    p_ssb_short + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_short), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats_combs/", 
-                         "baseOM_combs_short.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_recovery_proportion, 
-                    p_recovery_time + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_recovery_time), ncol = 2, rel_widths = c(0.5, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_stats_combs/", 
-                         "baseOM_combs_recovery.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### summary plots: compare alternative OMs ####
-### ------------------------------------------------------------------------ ###
-
-### alternative OMs
-### select maximum yield combinations
-combs_alt <- data.frame(name = c("F0", "A*", "A", "B", "C", "AD", "BE", "CE"),
-                    HCR = c("F0", "A", "A", "B", "C", "A", "B", "C"),
-                    BB = c(rep(FALSE, 5), rep(TRUE, 3)),
-                    TACconstr = c(rep(FALSE, 5), rep(TRUE, 3)),
-                    Btrigger = c(0, 150000, 170000, 160000, 170000, 190000,
-                                 130000, 140000),
-                    Ftrgt = c(0, 0.31, 0.38, 0.38, 0.38, 0.40, 0.36, 0.36),
-                    scenario = 0)
-combs_alt <- rbind(cbind(combs_alt, OM = "cod4"),
-                   cbind(combs_alt, OM = "cod4_alt1"),
-                   cbind(combs_alt, OM = "cod4_alt2"),
-                   cbind(combs_alt, OM = "cod4_alt3"))
-combs_alt <- merge(combs_alt, stats)
-combs_alt <- stats_full(data = combs_alt)
-ggplot(data = combs_alt, 
-       mapping = aes(x = name, y = value, group = interaction(OM, name), 
-                     colour = OM)) +
-  geom_boxplot() + 
-  facet_wrap(~ key, scales = "free_y") +
-  theme_bw() +
-  ylim(0, NA)
-
-p_catch_long <- ggplot(data = combs_alt[combs_alt$key == "catch_long", ], 
-                       mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term catch [t]") +
-  coord_cartesian(ylim = c(0, 2e+05)) +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
-                     limits = c(0, NA))
-p_catch_medium <- ggplot(data = combs_alt[combs_alt$key == "catch_medium", ], 
-                         mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term catch [t]") +
-  coord_cartesian(ylim = c(0, 2e+05)) +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
-                     limits = c(0, NA))
-p_catch_short <- ggplot(data = combs_alt[combs_alt$key == "catch_short", ], 
-                        mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term catch [t]") +
-  coord_cartesian(ylim = c(0, 2.1e+05)) +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 2),
-                     limits = c(0, NA))
-p_risk1_long <- ggplot(data = combs_alt[combs_alt$key == "risk1_long", ], 
-                       mapping = aes(x = name, y = value, fill = OM, 
-                                     colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_alt[combs_alt$key == "risk3_long", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 1") +
-  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
-p_risk1_medium <- ggplot(data = combs_alt[combs_alt$key == "risk1_medium", ], 
-                         mapping = aes(x = name, y = value, fill = OM,
-                                       colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_alt[combs_alt$key == "risk3_medium", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 1") +
-  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
-p_risk1_short <- ggplot(data = combs_alt[combs_alt$key == "risk1_short", ], 
-                        mapping = aes(x = name, y = value, fill = OM,
-                                      colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_alt[combs_alt$key == "risk3_short", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 1")
-p_risk3_long <- ggplot(data = combs_alt[combs_alt$key == "risk3_long", ], 
-                       mapping = aes(x = name, y = value, fill = OM,
-                                     colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 3") +
-  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
-p_risk3_medium <- ggplot(data = combs_alt[combs_alt$key == "risk3_medium", ], 
-                         mapping = aes(x = name, y = value, fill = OM,
-                                       colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 3") +
-  scale_y_continuous(breaks = c(0, 0.025, 0.05, 0.075, 0.1))
-p_risk3_short <- ggplot(data = combs_alt[combs_alt$key == "risk3_short", ], 
-                        mapping = aes(x = name, y = value, fill = OM,
-                                      colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 3")
-p_iav_long <- ggplot(data = combs_alt[combs_alt$key == "iav_long", ], 
-                     mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term inter-annual catch variability")
-p_iav_medium <- ggplot(data = combs_alt[combs_alt$key == "iav_medium", ], 
-                       mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term inter-annual catch variability")
-p_iav_short <- ggplot(data = combs_alt[combs_alt$key == "iav_short", ], 
-                      mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1.5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term inter-annual catch variability")
-p_ssb_long <- ggplot(data = combs_alt[combs_alt$key == "ssb_long", ], 
-                     mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term SSB [t]") +
-  theme(legend.direction = "horizontal") +
-  coord_cartesian(ylim = c(0, 2.3e+06))
-p_ssb_medium <- ggplot(data = combs_alt[combs_alt$key == "ssb_medium", ], 
-                       mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term SSB [t]") +
-  theme(legend.direction = "horizontal") +
-  coord_cartesian(ylim = c(0, 1.8e+06))
-p_ssb_short <- ggplot(data = combs_alt[combs_alt$key == "ssb_short", ], 
-                      mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term SSB [t]") +
-  theme(legend.direction = "horizontal") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
-                     limits = c(0, NA)) +
-  coord_cartesian(ylim = c(0, 8e+05))
-p_recovery_proportion <- 
-  ggplot(data = combs_alt[combs_alt$key == "recovery_proportion", ], 
-         mapping = aes(x = name, y = value, fill = OM, colour = OM)) +
-  geom_bar(show.legend = FALSE, stat = "identity",
-           position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery proportion")
-p_recovery_time <- 
-  ggplot(data = combs_alt[combs_alt$key == "recovery_time", ], 
-         mapping = aes(x = name, y = value, colour = OM)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery time [years]")
-
-plot_grid(plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long,
-                    p_ssb_long + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_long), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "summary_altOM_long.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_medium, p_risk1_medium, p_risk3_medium, p_iav_medium,
-                    p_ssb_medium + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_medium), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "summary_altOM_medium.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_short, p_risk1_short, p_risk3_short, p_iav_short,
-                    p_ssb_short + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_short), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "summary_altOM_short.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_recovery_proportion, 
-                    p_recovery_time + theme(legend.position = "none"),
-          align = "hv"),
-          get_legend(p_recovery_time), ncol = 2, rel_widths = c(0.5, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "summary_altOM_recovery.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### compare base OM with OM_alt3 (density dependent M) ####
-### ------------------------------------------------------------------------ ###
-
-OM_0_3_stats <- stats %>% 
-  filter(OM %in% c("cod4", "cod4_alt3") &
-           HCR == "A" & Btrigger == 170000 & Ftrgt == 0.38 &
-           BB == FALSE)
-OMs <- list(
-  base = readRDS(paste0("output/runs/cod4/1000_20/",
-                        "cod4_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE",
-                        "_BB-FALSE.rds"))@stock,
-  ddM = readRDS(paste0("output/runs/cod4/1000_20/",
-                        "cod4_alt3_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr",
-                        "-FALSE_BB-FALSE.rds"))@stock)
-input_OM <- list(
-  base = readRDS("input/cod4/1000_20/base_run.rds")$om@stock,
-  ddM = readRDS("input/cod4/1000_20/base_run.rds")$om@stock
-)
-OMs_df <- lapply(seq(input_OM), function(x) {
-  M <- m(input_OM[[x]])
-  M[, dimnames(m(OMs[[x]]))$year] <- m(OMs[[x]])
-  SSB <- ssb(input_OM[[x]])
-  SSB[, dimnames(m(OMs[[x]]))$year] <- ssb(OMs[[x]])
-  qnts <- FLQuants("M at age 1" = M[1,], "M at age 2" = M[2,], 
-                   "M at age 3" = M[3,], "M at age 4" = M[4,], 
-                   "M at age 5" = M[5,], "M at age 6" = M[6,],
-                   "SSB" = SSB)
-  cbind(as.data.frame(qnts), OM = names(OMs)[x])
-})
-OMs_df <- do.call(rbind, OMs_df)
-OMs_df <- OMs_df %>% group_by(age, year, qname, OM) %>%
-  summarise(X0.05 = quantile(data, probs = 0.05),
-            X0.25 = quantile(data, probs = 0.25),
-            X0.50 = quantile(data, probs = 0.50),
-            X0.75 = quantile(data, probs = 0.75),
-            X0.95 = quantile(data, probs = 0.95))
-p1 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 1),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
-  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank())
-p2 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 2),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
-  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-        strip.text.x = element_blank())
-p3 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 3),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
-  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-        strip.text.x = element_blank())
-p4 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 4),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
-p5 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 5),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
-p6 <- ggplot(data = OMs_df %>% filter(year >= 2000 & age == 6),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-        strip.text.x = element_blank()) + ylim(c(0.199, 0.201))
-p7 <- ggplot(data = OMs_df %>% filter(year >= 2000 & qname == "SSB"),
-             aes(x = year, y = X0.50, fill = OM)) +
-  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3,show.legend = FALSE) +
-  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, show.legend = FALSE) +
-  geom_line(aes(colour = OM), show.legend = FALSE) +
-  facet_grid(qname ~ OM, scales = "free_y") +
-  theme_bw() +
-  theme(axis.title.y = element_blank(), strip.text.x = element_blank())
-plot_grid(p1, p2, p3, p4, p5, p6, p7, ncol = 1, align = "vh")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "baseOM_vs_ddM.png"), 
-       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### compare OM SSB/F with MP SSB/F ####
-### ------------------------------------------------------------------------ ###
-
-df <- foreach(OM = c("cod4", "cod4_alt1", "cod4_alt2", "cod4_alt3"),
-              .combine = rbind) %do% {
-  res <- readRDS(paste0("output/runs/cod4/1000_20/", OM, "_HCR-A_Ftrgt-0.38",
-                        "_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds"))
-  res_input <- readRDS(paste0("input/", OM, "/1000_20/base_run.rds"))$om@stock
-  tmp <- FLQuant(NA, dimnames = list(
-    metric = c("F.om", "SSB.om", "F.est", "SSB.est", "F", "SSB"), 
-    year = dimnames(res_input)$year,
-    iter = dimnames(res_input)$iter))
-  tmp["F.est", ac(an(dimnames(res@tracking)$year) - 1)] <- 
-    res@tracking["F.est"]
-  tmp["SSB.est", ac(an(dimnames(res@tracking)$year) - 1)] <- 
-    res@tracking["B.est"]
-  tmp["SSB.om", dimnames(res_input)$year] <- ssb(res_input)
-  tmp["F.om", dimnames(res_input)$year] <- fbar(res_input)
-  tmp["SSB.om", dimnames(res@stock)$year] <- ssb(res@stock)
-  tmp["F.om", dimnames(res@stock)$year] <- fbar(res@stock)
-  tmp["SSB"] <- tmp["SSB.est"] / tmp["SSB.om"]
-  tmp["F"] <- tmp["F.est"] / tmp["F.om"]
-  tmp_out <- cbind(as.data.frame(tmp), OM = OM)
-  tmp_out <- tmp_out[!is.na(tmp_out$data) & is.finite(tmp_out$data), ]
-  tmp_out
-  
-}
-df <- df %>% group_by(metric, year, OM) %>%
-  summarise(X0.05 = quantile(data, probs = 0.05),
-            X0.25 = quantile(data, probs = 0.25),
-            X0.50 = quantile(data, probs = 0.50),
-            X0.75 = quantile(data, probs = 0.75),
-            X0.95 = quantile(data, probs = 0.95))
-ggplot(data = df %>% filter(metric %in% c("F", "SSB")),
-       aes(x = year, y = X0.50)) +
-  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3, fill = "#F8766D",
-              show.legend = FALSE) +
-  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, fill = "#F8766D",
-              show.legend = FALSE) +
-  geom_line(show.legend = FALSE) +
-  facet_grid(OM ~ metric) +
-  theme_bw() +
-  geom_hline(yintercept = 1, alpha = 0.5) +
-  labs(y = "MP value / OM value")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "MP_vs_OM.png"), 
-       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### OM_alt4: very low recruitment & stock below Blim ####
-### ------------------------------------------------------------------------ ###
-
-A <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-A_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds")
-plot(A@stock)
-B <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-B_Ftrgt-0.38_Btrigger-160000_TACconstr-FALSE_BB-FALSE.rds")
-plot(B@stock)
-C <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-C_Ftrgt-0.38_Btrigger-170000_TACconstr-FALSE_BB-FALSE.rds")
-AD <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-A_Ftrgt-0.4_Btrigger-190000_TACconstr-TRUE_BB-TRUE.rds")
-BE <- AD <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-B_Ftrgt-0.36_Btrigger-130000_TACconstr-TRUE_BB-TRUE.rds")
-CE <- readRDS("output/runs/cod4/1000_30/cod4_alt4_HCR-C_Ftrgt-0.36_Btrigger-140000_TACconstr-TRUE_BB-TRUE.rds")
-OM_alt4 <- FLStocks(A = A@stock, B = B@stock, C = C@stock,
-                    AD = AD@stock, BE = BE@stock, CE = CE@stock)
-plot(OM_alt4[1:3])
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "OM_alt4_ABC_stock.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### find minimum SSB
-sapply(OM_alt4, function(x) which.min(iterMedians(ssb(x))))
-dimnames(ssb(OM_alt4$A))$year[which.min(iterMedians(ssb(OM_alt4$A)))]
-### 2034
-df_4 <- as.data.frame(FLQuants(lapply(window(OM_alt4[1:3], 
-                                             start = 2034, end = 2034),
-                                      ssb)))
-
-ggplot(data = df_4,
-       aes(x = qname, y = data, group = qname, colour = qname)) +
-  geom_boxplot() +
-  theme_bw() +
-  labs(y = "SSB [t]", x = "HCR option") +
-  scale_color_discrete("")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "OM_alt4_ABC_lowest_SSB.png"), 
-       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
-### recovery time
-ssb_4 <- lapply(window(OM_alt4[1:3], start = 2034),
-                                       ssb)
-ssb_4 <- lapply(ssb_4, function(xi) {
-  FLQuant(xi >= 107000)
-})
-ssb_4 <- foreach(i = seq_along(ssb_4), .combine = "rbind") %do% {
-  data.frame(
-    data = apply(ssb_4[[i]]@.Data, 6, function(x) {
-      c(if (any(as.logical(x))) {which(as.logical(x))[1]} else {Inf})
-    }),
-    HCR = names(ssb_4)[i])
-}
-ggplot(data = ssb_4,
-       aes(x = HCR, y = data, colour = HCR)) +
-  geom_boxplot() +
-  theme_bw() +
-  labs(y = "recovery time to Blim [years]")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
-                         "OM_alt4_ABC_recovery.png"), 
-       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### base OM optimised options + TAC constraint, no BB ####
-### ------------------------------------------------------------------------ ###
-
-### select maximum yield combinations
-combs <- data.frame(name = rep(c("A", "B", "C", "AD", "BE", "CE"), each = 2),
-                    HCR = rep(c("A", "B", "C", "A", "B", "C"), each = 2),
-                    BB = c(rep(FALSE, 6), rep(c(TRUE, FALSE), 3)),
-                    TACconstr = c(rep(c(FALSE, TRUE), 3), 
-                                  rep(c(TRUE, TRUE), 3)),
-                    Btrigger = rep(c(170000, 160000, 170000, 190000, 130000,
-                                     140000), each = 2),
-                    Ftrgt = rep(c(0.38, 0.38, 0.38,
-                              0.40, 0.36, 0.36), each = 2),
-                    scenario = c("default", "TAC constraint"),
-                    OM = "cod4")
-combs <- merge(combs, stats)
-combs_dat <- stats_full(data = combs)
-combs_dat$scenario <- factor(combs_dat$scenario, 
-                             levels = c("default", "TAC constraint"))
-ggplot(data = combs_dat, 
-       mapping = aes(x = name, y = value, group = interaction(scenario, name), 
-                     colour = scenario)) +
-  geom_boxplot() + 
-  facet_wrap(~ key, scales = "free_y") +
-  theme_bw() +
-  ylim(0, NA)
-
-p_catch_long <- ggplot(data = combs_dat[combs_dat$key == "catch_long", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term catch [t]")
-p_catch_medium <- ggplot(data = combs_dat[combs_dat$key == "catch_medium", ], 
-                         mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term catch [t]")
-p_catch_short <- ggplot(data = combs_dat[combs_dat$key == "catch_short", ], 
-                        mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term catch [t]")
-p_risk1_long <- ggplot(data = combs_dat[combs_dat$key == "risk1_long", ], 
-                       mapping = aes(x = name, y = value, fill = scenario,
-                                     colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_long", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 1")
-p_risk1_medium <- ggplot(data = combs_dat[combs_dat$key == "risk1_medium", ], 
-                         mapping = aes(x = name, y = value, fill = scenario,
-                                       colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_medium", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 1")
-p_risk1_short <- ggplot(data = combs_dat[combs_dat$key == "risk1_short", ], 
-                        mapping = aes(x = name, y = value, fill = scenario,
-                                      colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk3_short", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 1")
-p_risk3_long <- ggplot(data = combs_dat[combs_dat$key == "risk3_long", ], 
-                       mapping = aes(x = name, y = value, fill = scenario,
-                                     colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_long", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term risk 3")
-p_risk3_medium <- ggplot(data = combs_dat[combs_dat$key == "risk3_medium", ], 
-                         mapping = aes(x = name, y = value, fill = scenario,
-                                       colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_medium", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term risk 3")
-p_risk3_short <- ggplot(data = combs_dat[combs_dat$key == "risk3_short", ], 
-                        mapping = aes(x = name, y = value, fill = scenario,
-                                      colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity", 
-           position = position_dodge2(preserve = "single")) + 
-  geom_blank(data = combs_dat[combs_dat$key == "risk1_short", ]) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term risk 3")
-p_iav_long <- ggplot(data = combs_dat[combs_dat$key == "iav_long", ], 
-                     mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term inter-annual catch variability")
-p_iav_medium <- ggplot(data = combs_dat[combs_dat$key == "iav_medium", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term inter-annual catch variability")
-p_iav_short <- ggplot(data = combs_dat[combs_dat$key == "iav_short", ], 
-                      mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = FALSE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 1.5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term inter-annual catch variability")
-p_ssb_long <- ggplot(data = combs_dat[combs_dat$key == "ssb_long", ], 
-                     mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 3e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "long-term SSB [t]") +
-  theme(legend.direction = "horizontal")
-p_ssb_medium <- ggplot(data = combs_dat[combs_dat$key == "ssb_medium", ], 
-                       mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) + 
-  coord_cartesian(ylim = c(0, 3e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "medium-term SSB [t]") +
-  theme(legend.direction = "horizontal")
-p_ssb_short <- ggplot(data = combs_dat[combs_dat$key == "ssb_short", ], 
-                      mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  coord_cartesian(ylim = c(0, 3e+5)) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "short-term SSB [t]") +
-  theme(legend.direction = "horizontal") +
-  scale_y_continuous(labels = function(x) format(x, scientific = TRUE, digits = 1),
-                     limits = c(0, NA))
-p_recovery_proportion <- 
-  ggplot(data = combs_dat[combs_dat$key == "recovery_proportion", ], 
-         mapping = aes(x = name, y = value, fill = scenario, colour = scenario)) +
-  geom_bar(show.legend = FALSE, stat = "identity",
-           position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery proportion")
-p_recovery_time <- 
-  ggplot(data = combs_dat[combs_dat$key == "recovery_time", ], 
-         mapping = aes(x = name, y = value, colour = scenario)) +
-  geom_boxplot(show.legend = TRUE, size = 0.25, outlier.size = 0.3,
-               position = position_dodge2(preserve = "single")) +
-  theme_bw() + ylim(0, NA) +
-  labs(x = "", y = "recovery time [years]")
-
-plot_grid(plot_grid(p_catch_long, p_risk1_long, p_risk3_long, p_iav_long,
-                    p_ssb_long + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_long), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
-                         "baseOM_combs_long.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_medium, p_risk1_medium, p_risk3_medium, p_iav_medium,
-                    p_ssb_medium + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_medium), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
-                         "baseOM_combs_medium.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_catch_short, p_risk1_short, p_risk3_short, p_iav_short,
-                    p_ssb_short + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_ssb_short), nrow = 2, rel_heights = c(1, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
-                         "baseOM_combs_short.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-plot_grid(plot_grid(p_recovery_proportion, 
-                    p_recovery_time + theme(legend.position = "none"),
-                    align = "hv"),
-          get_legend(p_recovery_time), ncol = 2, rel_widths = c(0.5, 0.1))
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/baseOM_TAC_constraint/", 
-                         "baseOM_combs_recovery.png"), 
-       width = 30, height = 20, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### plot risk over time ####
-### ------------------------------------------------------------------------ ###
-
-### get optimized A
-stkA_file <- stats %>% filter(OM == "cod4" & Ftrgt == 0.38 & Btrigger == 170000 &
-                   TACconstr == FALSE & BB == FALSE & HCR == "A")
-### get simulated SSB
-ssbA_new <- ssb(readRDS(paste0("output/runs/cod4/1000_20/", 
-                               stkA_file$file))@stock)
-### get historical SSB
-ssbA <- ssb(readRDS("input/cod4/1000_20/base_run.rds")$om@stock)
-### combine
-ssbA[, dimnames(ssbA_new)$year] <- ssbA_new
-### calculate annual risk
-riskA <- apply((ssbA < stkA_file$Blim), 2, mean)
-### plot
-ggplot(data = as.data.frame(window(riskA, start = 2018)), 
-       aes(x = year , y = data)) +
-  geom_line() +
-  theme_bw() +
-  labs(x = "year", y = "p(SSB<Blim)") +
-  geom_vline(data = data.frame(x = c(2018.5, 2023.5, 2028.5)),
-             aes(xintercept = x), linetype = "dashed")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
-                         "risk_A_optimized.png"), 
-       width = 15, height = 10, units = "cm", dpi = 300, type = "cairo")
-
-
-### for 10,000 iterations - 50 years - projection, A*
-res10000 <- readRDS("output/runs/cod4/10000_50_base.rds")
-risk_t <- apply(ssb(res10000@stock) < 107000, 2, mean)
-ggplot(data = as.data.frame(window(risk_t, start = 2018)), 
-       aes(x = year , y = data)) +
-  geom_line() +
-  theme_bw() +
-  labs(x = "year", y = "p(SSB<Blim)") +
-  geom_vline(data = data.frame(x = c(#2018.5, 2023.5, 
-                                     2028.5, 2038.5)),
-             aes(xintercept = x), linetype = "dashed")
-ggsave(filename = paste0("output/runs/cod4/1000_20/plots/stock_plots/", 
-                         "risk_A_star_10000.png"), 
-       width = 15, height = 10, units = "cm", dpi = 300, type = "cairo")
-
-
-### ------------------------------------------------------------------------ ###
-### summary table(s) for report ####
-### ------------------------------------------------------------------------ ###
-
-### HCR options
-res <- stats %>%
-  filter((file == "cod4_F0.rds") |
-           (OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt == 0.31 & Btrigger == 150000) |
-           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt == 0.31 & Btrigger == 150000) |
-           (OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt == 0.38 & Btrigger == 170000) |
-           (OM == "cod4" & HCR == "B" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt == 0.38 & Btrigger == 160000) |
-           (OM == "cod4" & HCR == "C" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt == 0.38 & Btrigger == 170000) |
-           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt == 0.40 & Btrigger == 190000) |
-           (OM == "cod4" & HCR == "B" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt == 0.36 & Btrigger == 130000) |
-           (OM == "cod4" & HCR == "C" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt == 0.36 & Btrigger == 140000)
+### summary statistics
+full_stats <- readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/stats_full.rds")
+short_stats <- readRDS("output/runs/cod4/1000_20/stats_cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds")
+full_stats %>% 
+  filter(OM == "cod4" & Ftrgt == 0.31 & Btrigger == 150000 & HCR == "A" &
+           TACconstr == FALSE & BB == FALSE) %>%
+  mutate(assessment = "SAM") %>%
+  bind_rows(as.data.frame(short_stats) %>%
+              mutate(assessment = "shortcut")) %>%
+  select(catch_median_short, catch_median_medium, catch_median_long,
+         ssb_median_short, ssb_median_medium, ssb_median_long,
+         fbar_median_short, fbar_median_medium, fbar_median_long,
+         risk1_short, risk1_medium, risk1_long,
+         risk3_short, risk3_medium, risk3_long,
+         iav_short, iav_medium, iav_long,
+         assessment
          ) %>%
-  select(HCR, BB, Ftrgt, Btrigger, 
-         catch_median_long, ssb_median_long, fbar_median_long,
-         iav_long, iavTAC_long, risk3_long, risk1_long, 
-         catch_median_medium, ssb_median_medium, fbar_median_medium, 
-         iav_medium, iavTAC_medium, risk3_medium, risk1_medium, 
-         catch_median_short, ssb_median_short, fbar_median_short, 
-         iav_short, iavTAC_short, risk3_short, risk1_short,
-         conv_failed, F_maxed, recovery_proportion, recovery_time)
-res$MS <- c("F=0", "A*", "A*+D", "A", "A+D", "B+E", "B", "C+E", "C")
-res <- res[c(1, 2, 3, 4, 7, 9, 5, 6, 8), c(30, 3:29)]
-names(res) <- c("MS", "Ftrgt", "Btrigger",
-                c(t(outer(c("long-term", "medium-term", "short-term"),
-                      c("median catch", "median SSB", "realized mean F",
-                        "ICV", "ITV", "risk3", "risk1"), paste))),
-                "convergence failure", "Fmax reached",
-                "recovery proportion", "median recovery time")
-res[, c(3:5, 11, 12, 18, 19)] <- round(res[, c(3:5, 11, 12, 18, 19)])
-res[, c(6:10, 13:17, 20:24, 27)] <- round(res[, c(6:10, 13:17, 20:24, 27)], 3)
-res <- apply(res, 2, as.character)
-res <- t(res)
+  pivot_longer(c(1:18)) %>%
+  mutate(time = ifelse(grepl(x = name, pattern = "short"), "short", NA),
+         time = ifelse(grepl(x = name, pattern = "medium"), "medium", time),
+         time = ifelse(grepl(x = name, pattern = "long"), "long", time),
+         stat = sapply(strsplit(x = name, split = "_"), "[[", 1)) %>%
+  mutate(time = factor(time, levels = c("short", "medium", "long"))) %>%
+  mutate(value = ifelse(stat %in% c("catch", "ssb"), value/1000, value)) %>%
+  mutate(stat = factor(stat, levels = c("risk1", "risk3", "ssb", "catch", 
+                                         "fbar", "iav"),
+                        labels = c("Risk 1", "Risk 3", "SSB [1000t]", 
+                                   "Catch [1000t]", "F (ages 2-4)", "ICV"))) %>%
+  ggplot(aes(x = time, y = value, fill = assessment)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ stat, scales = "free_y", strip.position = "left") +
+  theme_bw(base_size = 8) +
+  ylim(c(0, NA)) +
+  labs(y = "") +
+  theme(strip.placement = "outside",
+        strip.background = element_blank()) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)))
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_stats.png", 
+       width = 17, height = 12, units = "cm", dpi = 600, type = "cairo")
 
-### sensitivity
-res <- stats %>%
-  filter((OM == "cod4" & HCR == "A" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) & 
-            Btrigger == 170000) |
-           (OM == "cod4" & HCR == "B" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) & 
-              Btrigger == 160000) |
-           (OM == "cod4" & HCR == "C" & BB == FALSE & TACconstr == FALSE &
-              Ftrgt %in% round(c(0.198, 0.38 * c(0.9, 1, 1.1), 0.46), 3) &
-              Btrigger == 170000) |
-           (OM == "cod4" & HCR == "A" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt %in% round(c(0.198, 0.4 * c(0.9, 1, 1.1), 0.46), 3) & 
-              Btrigger == 190000) |
-           (OM == "cod4" & HCR == "B" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt %in% round(c(0.198, 0.36 * c(0.9, 1, 1.1), 0.46), 3) & 
-              Btrigger == 130000) |
-           (OM == "cod4" & HCR == "C" & BB == TRUE & TACconstr == TRUE &
-              Ftrgt %in% round(c(0.198, 0.36 * c(0.9, 1, 1.1), 0.46), 3) & 
-              Btrigger == 140000)
-  ) %>%
-  select(HCR, BB, Ftrgt, Btrigger, 
-         "long-term median catch" = catch_median_long, 
-         "long-term median SSB" = ssb_median_long, 
-         "long-term realized mean F" = fbar_median_long,
-         "long-term ICV" = iav_long, "long-term ITV" = iavTAC_long, 
-         "long-term risk3" = risk3_long, "long-term risk1" = risk1_long, 
-         "medium-term median catch" = catch_median_medium, 
-         "medium-term median SSB" = ssb_median_medium, 
-         "medium-term realized mean F" = fbar_median_medium, 
-         "medium-term ICV" = iav_medium, "medium-term IRV" = iavTAC_medium,
-         "medium-term risk3" = risk3_medium, 
-         "medium-term risk1" = risk1_medium, 
-         "short-term median catch" = catch_median_short, 
-         "short-term median SSB" = ssb_median_short, 
-         "short-term realized mean F" = fbar_median_short, 
-         "short-term ICV" = iav_short, "short-term ITV" = iavTAC_short, 
-         "short-term risk3" = risk3_short, "short-term risk1" = risk1_short,
-         "convergence failure" = conv_failed, "Fmax reached" = F_maxed, 
-         "recovery proportion" = recovery_proportion, 
-         "median recovery time" = recovery_time) %>%
-  arrange(HCR, BB, Ftrgt) %>%
-  mutate(column = rep(c("FMSY lower", "Ftrgt * 0.9", "Ftrgt", "Ftrgt * 1.1",
-                "FMSY upper"), 6),
-         MS = HCR,
-         MS = ifelse(BB == TRUE & HCR == "A", paste0(HCR, "+D"), MS),
-         MS = ifelse(BB == TRUE & HCR %in% c("B", "C"), paste0(HCR, "+E"), MS)) %>%
-  select(MS, column, Ftrgt:"median recovery time")
-res[, c(4:6, 12, 13, 19, 20)] <- round(res[, c(4:6, 12, 13, 19, 20)])
-res[, c(7:11, 14:18, 21:25, 28)] <- round(res[, c(7:11, 14:18, 21:25, 28)], 3)
-res <- as.data.frame(apply(res, 2, as.character), stringsAsFactors = FALSE)
-#res <- t(res)
+### time series
+input_full <- readRDS("../WK_WKNSMSE_cod.27.47d20/input/cod4/1000_20/base_run.rds")
+input_short <- readRDS("input/cod4/1000_20/base_run.rds")
+input_short_catch_n <- readRDS("input/cod4/1000_20/catch_n.rds")
+### historical period identical
+res_full <- readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds")
+res_short <- readRDS("output/runs/cod4/1000_20/MP_cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds")
 
-res_list <- split(res, res$MS)
-res_list <- lapply(names(res_list), function(x) {
-  tmp <- as.data.frame(t(res_list[[x]][, -1]), stringsAsFactors = FALSE)
-  names(tmp) <- tmp[1, ]
-  tmp <- tmp[-1, ]
-  tmp$HCR = x
-  tmp$column = rownames(tmp)
-  tmp <- tmp[, c("HCR", "column", "FMSY lower", "Ftrgt * 0.9", "Ftrgt", "Ftrgt * 1.1", "FMSY upper")]
-  rownames(tmp) <- NULL
-  tmp
+### combine history and projection
+stk_full <- input_short$om@stock
+stk_full[, dimnames(res_full@stock)$year] <- res_full@stock
+catch.n(stk_full)[, dimnames(input_short_catch_n)$year] <- input_short_catch_n
+catch(stk_full) <- computeCatch(stk_full)
+stk_short <- stk_full
+stk_short[, dimnames(res_short@stock)$year] <- res_short@stock
+
+probs <- c(0.05, 0.5, 0.95)
+iters <- c(1:3)
+qnts <- list(SAM = stk_full, shortcut = stk_short)
+qnts <- lapply(qnts, function(x) {
+  FLQuants(rec = rec(x), ssb = ssb(x), catch = catch(x), fbar = fbar(x))
 })
-names(res_list) <- names(split(res, res$MS))
-res_list <- res_list[c("A", "B", "C", "A+D", "B+E", "C+E")]
-res_list <- do.call(rbind, res_list)
-row.names(res_list) <- NULL
+qnts <- lapply(qnts, function(x) {
+  lapply(x, function(y) {
+    res <- y[,,,,, c(seq(length(probs)), iters)]
+    res[,,,,, c(seq(length(probs)))] <- quantile(y, probs = probs)
+    dimnames(res)$iter <- c(probs, iters)
+    return(res)
+  })
+})
+df <- lapply(names(qnts), function(x) cbind(as.data.frame(qnts[[x]]), 
+                                            assessment = x))
+df <- do.call(rbind, df)
+df <- df %>% 
+  select(year, iter, data, qname, assessment) %>%
+  mutate(data = ifelse(qname %in% c("ssb", "catch"), data/1000, data)) %>%
+  mutate(data = ifelse(qname %in% c("rec"), data/1e+6, data)) %>%
+  pivot_wider(names_from = iter, values_from = data) %>%
+  mutate(qname = factor(qname, levels = c("catch", "rec", "fbar", "ssb"),
+                        labels = c("Catch [1000t]", "Recruitment [millions]",
+                                   "F (ages 2-4)", "SSB [1000t]")))
+df %>%
+  ggplot() +
+  geom_ribbon(aes(x = year, ymin = `0.05`, ymax = `0.95`, fill = assessment),
+              alpha = 0.1) +
+  scale_fill_manual(values = c(SAM = "black", shortcut = "red")) +
+  geom_line(aes(x = year, y = `0.5`, linetype = assessment, colour = assessment)) +
+  geom_line(aes(x = year, y = `0.05`, linetype = assessment, colour = assessment), 
+            show.legend = FALSE, alpha = 0.2) +
+  geom_line(aes(x = year, y = `0.95`, linetype = assessment, colour = assessment), 
+            show.legend = FALSE, alpha = 0.2) +
+  scale_colour_manual(values = c(SAM = "black", shortcut = "red")) +
+  geom_line(aes(x = year, y = `1`, linetype = assessment), 
+            alpha = 0.1, size = 0.2, colour = scales::hue_pal()(3)[1]) +
+  geom_line(aes(x = year, y = `2`, linetype = assessment), 
+            alpha = 0.1, size = 0.2, colour = scales::hue_pal()(3)[2]) +
+  geom_line(aes(x = year, y = `3`, linetype = assessment), 
+            alpha = 0.1, size = 0.2, colour = scales::hue_pal()(3)[3]) +
+  facet_wrap(~ qname, scales = "free_y", strip.position = "left") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background = element_blank()) +
+  labs(x = "year", y = "") +
+  ylim(c(0, NA)) +
+  geom_vline(xintercept = 2018.5, size = 0.2)
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_timeseries.png", 
+       width = 17, height = 12, units = "cm", dpi = 600, type = "cairo")
+df %>%
+  filter(year >= 2010) %>%
+  ggplot() +
+  geom_ribbon(aes(x = year, ymin = `0.05`, ymax = `0.95`, fill = assessment),
+              alpha = 0.1) +
+  scale_fill_manual(values = c(SAM = "black", shortcut = "red")) +
+  geom_line(aes(x = year, y = `0.5`, linetype = assessment, colour = assessment)) +
+  geom_line(aes(x = year, y = `0.05`, linetype = assessment, colour = assessment), 
+            show.legend = FALSE, alpha = 0.2) +
+  geom_line(aes(x = year, y = `0.95`, linetype = assessment, colour = assessment), 
+            show.legend = FALSE, alpha = 0.2) +
+  scale_colour_manual(values = c(SAM = "black", shortcut = "red")) +
+  geom_line(aes(x = year, y = `1`, linetype = assessment), 
+            alpha = 0.2, size = 0.2, colour = scales::hue_pal()(3)[1]) +
+  geom_line(aes(x = year, y = `2`, linetype = assessment), 
+            alpha = 0.2, size = 0.2, colour = scales::hue_pal()(3)[2]) +
+  geom_line(aes(x = year, y = `3`, linetype = assessment), 
+            alpha = 0.2, size = 0.2, colour = scales::hue_pal()(3)[3]) +
+  facet_wrap(~ qname, scales = "free_y", strip.position = "left") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background = element_blank()) +
+  labs(x = "year", y = "") +
+  ylim(c(0, NA)) +
+  geom_vline(xintercept = 2018.5, size = 0.2)
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_timeseries_zoom.png", 
+       width = 17, height = 12, units = "cm", dpi = 600, type = "cairo")
+
+
+### ------------------------------------------------------------------------ ###
+### SAM vs. shortcut - compare grid ####
+### ------------------------------------------------------------------------ ###
+
+### collate stats (on HPC)
+# files <- list.files(path = "output/runs/cod4/1000_20/", pattern = "stats_cod",
+#                     full.names = TRUE)
+# stats_short <- lapply(files, readRDS)
+# stats_short <- data.frame(do.call(bind_rows, stats_short))
+# stats_short <- data.frame(lapply(stats_short, unlist))
+# saveRDS(stats_short, file = "output/runs/cod4/1000_20/stats_combined.rds")
+stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
+
+stats_combined <- full_stats %>% 
+  mutate(assessment = "OM1: SAM") %>%
+  filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)) %>%
+  bind_rows(stats_short %>% 
+              mutate(assessment = "OM1: shortcut") %>%
+              filter(is.na(obs_sd))
+  ) %>%
+  filter(OM == "cod4" &
+           HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  select(Ftrgt, Btrigger, catch_median_long, risk3_long, assessment) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(risk_pos = ifelse(risk3_long <= 0.05, "below", "above"))
+### find yield maximum
+stats_combined_max <- stats_combined %>%
+  group_by(assessment) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_median_long == max(catch_median_long)) %>%
+  ungroup() %>%
+  mutate(assessment2 = assessment, assessment = NULL)
+stats_combined_max
+stats_combined_max_both <- stats_combined %>%
+  filter((Ftrgt == 0.38 & Btrigger == 170000) | 
+           (Ftrgt == 0.39 & Btrigger == 160000)) %>%
+  select(Ftrgt, Btrigger)
+# stats_combined <- stats_combined %>%
+#   full_join(stats_combined_max) %>%
+#   mutate(risk_pos = ifelse(!is.na(assessment2), "optimum", risk_pos),
+#          assessment2 = NULL)
+### Ftrgt steps where risk exceeds 5%
+stats_combined_step <- stats_combined %>%
+  group_by(assessment, Btrigger) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(risk3_long == max(risk3_long)) %>%
+  ungroup() %>%
+  arrange(Btrigger)
+stats_combined_step <- stats_combined_step %>%
+  mutate(Btrigger = Btrigger - 4999, Ftrgt = Ftrgt + 0.005) %>%
+  bind_rows(
+    stats_combined_step %>%
+      mutate(Btrigger = Btrigger + 4999, Ftrgt = Ftrgt + 0.005)) %>%
+  mutate(assessment2 = assessment, assessment = NULL)
+
+
+ggplot() +
+  geom_raster(data = stats_combined %>% 
+                filter(risk3_long <= 0.05) %>%
+                filter(catch_median_long >= 0.95 * max(catch_median_long)),
+              aes(x = Btrigger, y = Ftrgt, fill = catch_median_long)) +
+  scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
+                      high = "green") +
+  geom_text(data = stats_combined, 
+            aes(x = Btrigger, y = Ftrgt, 
+                label = round(catch_median_long), colour = risk3_long <= 0.05),
+            size = 1.2, show.legend = FALSE) +
+  scale_colour_manual("risk <= 0.05", 
+                      values = c("FALSE" = "red", "TRUE" = "black",
+                                 "OM1: SAM" = "black", "OM1: shortcut" = "blue")) +
+  geom_line(data = stats_combined_step, 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3) +
+  geom_tile(data = stats_combined_max, 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            width = 10000, height = 0.01,
+            alpha = 0, colour = "black", size = 0.3) +
+  geom_tile(data = data.frame(x = 170000, y = 0.38),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "black", linetype = 0) +
+  geom_tile(data = data.frame(x = 160000, y = 0.39),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.38) |
+                       (Btrigger == 160000 & Ftrgt == 0.39)),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  scale_linetype_discrete("optimum") + 
+  theme_bw() +
+  facet_wrap(~ assessment) +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt]))
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_A_both.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+
+
+p <- ggplot() +
+  geom_raster(data = stats_combined %>% 
+                filter(risk3_long <= 0.05) %>%
+                filter(catch_median_long >= 0.95 * max(catch_median_long)),
+              aes(x = Btrigger, y = Ftrgt, fill = catch_median_long)) +
+  scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
+                      high = "green") +
+  geom_text(data = stats_combined, 
+            aes(x = Btrigger, y = Ftrgt, 
+                label = round(catch_median_long), colour = risk3_long <= 0.05),
+            size = 1.2, show.legend = FALSE) +
+  scale_colour_manual("risk <= 0.05", 
+                      values = c("FALSE" = "red", "TRUE" = "black",
+                                 "OM1: SAM" = "black", "OM1: shortcut" = "blue")) +
+  geom_line(data = stats_combined_step %>% 
+              mutate(assessment = assessment2), 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3) +
+  # geom_tile(data = stats_combined_max, 
+  #           aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+  #           width = 10000, height = 0.01,
+  #           alpha = 0, colour = "black", size = 0.3) +
+  geom_tile(data = data.frame(x = 170000, y = 0.38, assessment = "OM1: SAM"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "black", linetype = 0) +
+  geom_tile(data = data.frame(x = 160000, y = 0.39, assessment = "OM1: shortcut"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.38 & assessment == "OM1: SAM")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 160000 & Ftrgt == 0.39 & assessment == "OM1: shortcut")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  scale_linetype_discrete("optimum") + 
+  theme_bw() +
+  facet_wrap(~ assessment) +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt])) +
+  theme(legend.position = "left")
+p
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_A_1.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+p <- p + geom_tile(data = data.frame(x = 160000, y = 0.39, assessment = "OM1: SAM"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 160000 & Ftrgt == 0.39 & assessment == "OM1: SAM")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  geom_line(data = stats_combined_step %>% 
+              filter(assessment2 == "OM1: shortcut") %>%
+              mutate(assessment = "OM1: SAM"), 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3)
+p
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_A_2.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+p <- p + geom_tile(data = data.frame(x = 170000, y = 0.38, assessment = "OM1: shortcut"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "black", linetype = 0) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.38 & assessment == "OM1: shortcut")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  geom_line(data = stats_combined_step %>% 
+              filter(assessment2 == "OM1: SAM") %>%
+              mutate(assessment = "OM1: shortcut"), 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3)
+p
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_A_3.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+
+### ------------------------------------------------------------------------ ###
+### alternative OMs - grids ####
+### ------------------------------------------------------------------------ ###
+stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
+stats_OMs <- stats_short %>% 
+  filter(is.na(obs_sd)) %>%
+  select(OM, Ftrgt, Btrigger, catch_median_long, risk3_long) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(risk_pos = ifelse(risk3_long <= 0.05, "below", "above")) %>%
+  mutate(OM = factor(OM, 
+                     levels = c("cod4", "cod4_alt1", "cod4_alt2", "cod4_alt3"),
+                     labels = c("OM1 (baseline)", "OM2 (recruitment)",
+                                "OM3 (year effects)", "OM4 (dens. dep. M)")))
+### find yield maximum
+stats_OM_max <- stats_OMs %>%
+  group_by(OM) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_median_long == max(catch_median_long)) %>%
+  ungroup() %>%
+  mutate(OM_ = OM)
+stats_OM_max
+### Ftrgt steps where risk exceeds 5%
+stats_OM_step <- stats_OMs %>%
+  group_by(OM, Btrigger) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(risk3_long == max(risk3_long)) %>%
+  ungroup() %>%
+  arrange(Btrigger)
+stats_OM_step <- stats_OM_step %>%
+  mutate(Btrigger = Btrigger - 4999, Ftrgt = Ftrgt + 0.005) %>%
+  bind_rows(
+    stats_OM_step %>%
+      mutate(Btrigger = Btrigger + 4999, Ftrgt = Ftrgt + 0.005)) %>%
+  mutate(OM_ = OM)
+
+p <- ggplot() +
+  geom_raster(data = stats_OMs %>% 
+                group_by(OM) %>%
+                filter(risk3_long <= 0.05) %>%
+                filter(catch_median_long >= 0.95 * max(catch_median_long)) %>%
+                mutate(catch_median_long = catch_median_long/max(catch_median_long)),
+              aes(x = Btrigger, y = Ftrgt, fill = catch_median_long)) +
+  scale_fill_gradient(paste0("yield maximum\narea (relative)"), low = "red",
+                      high = "green") +
+  geom_text(data = stats_OMs, 
+            aes(x = Btrigger, y = Ftrgt, 
+                label = round(catch_median_long), colour = risk3_long <= 0.05),
+            size = 1.2, show.legend = FALSE) +
+  scale_colour_manual("risk <= 0.05",
+                      values = c("FALSE" = "red", "TRUE" = "black",
+                                 "OM1 (baseline)" = "black", 
+                                 "OM2 (recruitment)" = "blue",
+                                 "OM3 (year effects)" = "darkgreen", 
+                                 "OM4 (dens. dep. M)" = "brown")) +
+  geom_line(data = stats_OM_step, 
+            aes(x = Btrigger, y = Ftrgt, colour = OM_),
+            show.legend = FALSE, size = 0.3) +
+  new_scale_fill() +
+  geom_tile(data = stats_OM_max, 
+            aes(x = Btrigger, y = Ftrgt, fill = OM_),
+            width = 10000, height = 0.01,
+            size = 0.3) +
+  scale_fill_manual("optimum", 
+                    values = c("OM1 (baseline)" = "black", 
+                               "OM2 (recruitment)" = "blue",
+                               "OM3 (year effects)" = "darkgreen", 
+                               "OM4 (dens. dep. M)" = "brown")) +
+  geom_text(data = stats_OM_max,
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  theme_bw() +
+  facet_wrap(~ OM) +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt])) +
+  ylim(c(0.25, NA))
+p
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_OMs.png", 
+       width = 17, height = 13, units = "cm", dpi = 600, type = "cairo")
+### add alternative OMs steps to OM1
+p + geom_line(data = stats_OM_step %>% 
+                mutate(OM = "OM1 (baseline)"), 
+              aes(x = Btrigger, y = Ftrgt, colour = OM_),
+              show.legend = FALSE, size = 0.3)
+ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_OMs_2.png", 
+       width = 17, height = 13, units = "cm", dpi = 600, type = "cairo")
+
+
+### ------------------------------------------------------------------------ ###
+### OM3: SAM vs. shortcut - compare grid ####
+### ------------------------------------------------------------------------ ###
+
+### shortcut
+stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
+### full MSE 
+stats_full_OM3 <- readRDS("../WK_WKNSMSE_cod.27.47d20_mse2.0/output/runs/cod4/1000_20/stats_combined_alt2.rds")
+
+stats_OM3_combined <- stats_full_OM3 %>% 
+  mutate(assessment = "OM3: SAM") %>%
+  bind_rows(stats_short %>% 
+              mutate(assessment = "OM3: shortcut") %>%
+              filter(is.na(obs_sd))
+  ) %>%
+  filter(OM == "cod4_alt2" &
+           HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  select(Ftrgt, Btrigger, catch_median_long, risk3_long, assessment) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(risk_pos = ifelse(risk3_long <= 0.05, "below", "above"))
+### find yield maximum
+stats_OM3_combined_max <- stats_OM3_combined %>%
+  group_by(assessment) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_median_long == max(catch_median_long)) %>%
+  ungroup() %>%
+  mutate(assessment2 = assessment, assessment = NULL)
+stats_OM3_combined_max
+stats_combined_max_both <- stats_OM3_combined %>%
+  filter((Ftrgt == 0.35 & Btrigger == 180000) | 
+           (Ftrgt == 0.37 & Btrigger == 170000)) %>%
+  select(Ftrgt, Btrigger)
+### Ftrgt steps where risk exceeds 5%
+stats_OM3_combined_step <- stats_OM3_combined %>%
+  group_by(assessment, Btrigger) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(risk3_long == max(risk3_long)) %>%
+  ungroup() %>%
+  arrange(Btrigger)
+stats_OM3_combined_step <- stats_OM3_combined_step %>%
+  mutate(Btrigger = Btrigger - 4999, Ftrgt = Ftrgt + 0.005) %>%
+  bind_rows(
+    stats_OM3_combined_step %>%
+      mutate(Btrigger = Btrigger + 4999, Ftrgt = Ftrgt + 0.005)) %>%
+  mutate(assessment2 = assessment, assessment = NULL) %>%
+  mutate(Ftrgt = ifelse(assessment2 == "OM3: SAM" & Ftrgt <= 0.33, NA, Ftrgt))
+
+
+p <- ggplot() +
+  geom_raster(data = stats_OM3_combined %>% 
+                filter(risk3_long <= 0.05) %>%
+                filter(catch_median_long >= 0.95 * max(catch_median_long)),
+              aes(x = Btrigger, y = Ftrgt, fill = catch_median_long)) +
+  scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
+                      high = "green") +
+  geom_text(data = stats_OM3_combined, 
+            aes(x = Btrigger, y = Ftrgt, 
+                label = round(catch_median_long), colour = risk3_long <= 0.05),
+            size = 1.2, show.legend = FALSE) +
+  scale_colour_manual("risk <= 0.05", 
+                      values = c("FALSE" = "red", "TRUE" = "black",
+                                 "OM3: SAM" = "black", "OM3: shortcut" = "blue")) +
+  geom_line(data = stats_OM3_combined_step %>% 
+              mutate(assessment = assessment2), 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3) +
+  geom_tile(data = data.frame(x = 180000, y = 0.35, assessment = "OM3: SAM"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "black", linetype = 0) +
+  geom_tile(data = data.frame(x = 170000, y = 0.37, assessment = "OM3: shortcut"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_OM3_combined %>%
+              filter((Btrigger == 180000 & Ftrgt == 0.35 & assessment == "OM3: SAM")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  geom_text(data = stats_OM3_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.37 & assessment == "OM3: shortcut")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  scale_linetype_discrete("optimum") + 
+  theme_bw() +
+  facet_wrap(~ assessment, nrow = 2) +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt])) +
+  ylim(c(0.24, 0.42))
+p
+ggsave(filename = "output/plots/OM3_SAM_vs_shortcut_grid_A_1.png", 
+       width = 10, height = 10, units = "cm", dpi = 600, type = "cairo")
+p <- p + geom_tile(data = data.frame(x = 170000, y = 0.37, assessment = "OM3: SAM"),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_OM3_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.37 & assessment == "OM3: SAM")),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  geom_line(data = stats_OM3_combined_step %>% 
+              filter(assessment2 == "OM3: shortcut") %>%
+              mutate(assessment = "OM3: SAM"), 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3)
+p
+ggsave(filename = "output/plots/OM3_SAM_vs_shortcut_grid_A_2.png", 
+       width = 10, height = 10, units = "cm", dpi = 600, type = "cairo")
+
+### ------------------------------------------------------------------------ ###
+### shortcut - compare assessment uncertainty ####
+### ------------------------------------------------------------------------ ###
+
+### results
+stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
+### default uncertainty values
+obs_sd_def <- readRDS(paste0(path_data, "obs_sd.rds"))
+obs_rho_def <- readRDS(paste0(path_data, "obs_rho.rds"))
+
+stats_unc <- stats_short %>%
+  filter(!is.na(obs_sd) & !is.na(obs_rho)) %>% 
+  select(Ftrgt, Btrigger, catch_median_long, risk3_long, obs_sd, obs_rho) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(risk_pos = ifelse(risk3_long <= 0.05, "below", "above")) 
+stats_unc <- bind_rows(
+  stats_unc %>% 
+    filter(round(obs_sd, 3) == round(obs_sd_def, 3)) %>% 
+    mutate(scenario = "rho",
+           uncertainty = obs_rho),
+  stats_unc %>% 
+    filter(round(obs_rho, 3) == round(obs_rho_def, 3)) %>% 
+    mutate(scenario = "sd",
+           uncertainty = obs_sd)
+  ) %>%
+  mutate(scenario = factor(scenario, levels = c("sd", "rho"),
+                           labels = c("uncertainty~(italic(sd))",
+                                      "autocorrelation~(italic(rho))")))
+### find yield maximum
+stats_unc_max <- stats_unc %>%
+  group_by(obs_sd, obs_rho) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_median_long == max(catch_median_long))
+stats_unc_max
+### Ftrgt steps where risk exceeds 5%
+stats_unc_step <- stats_unc %>%
+  group_by(uncertainty, obs_rho, obs_sd, Btrigger, scenario) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(risk3_long == max(risk3_long)) %>%
+  ungroup() %>%
+  arrange(Btrigger)
+# stats_unc_step %>%
+#   filter(scenario == "rho") %>%
+#   filter(Btrigger == 150000)
+stats_unc_step <- stats_unc_step %>%
+  mutate(Btrigger = Btrigger - 4999, Ftrgt = Ftrgt + 0.005) %>%
+  bind_rows(
+    stats_unc_step %>%
+      mutate(Btrigger = Btrigger + 4999, Ftrgt = Ftrgt + 0.005))
+### plot 5% risk steps
+p <- stats_unc_step %>%
+  ggplot(aes(x = Btrigger, y = Ftrgt, colour = uncertainty, group = uncertainty)) +
+  geom_line() +
+  scale_colour_gradientn("uncertainty", 
+                     colours = c(scales::hue_pal()(6)), # rainbow(n = 6, rev = TRUE)
+                     values = c(0, 0.1, 0.2, 0.3, 0.5, 1)
+                     ) +
+  geom_line(data = stats_unc_step %>%
+              filter(obs_rho == obs_rho_def & obs_sd == obs_sd_def),
+            aes(linetype = "default"),
+            colour = "black", show.legend = TRUE) +
+  scale_linetype("") +
+  theme_bw() +
+  facet_wrap(~ scenario, labeller = "label_parsed") +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt])) +
+  geom_tile(data = stats_unc_max,
+              aes(x = Btrigger, y = Ftrgt), 
+              width = 10000, height = 0.01,
+              linetype = 0, alpha = 0) # invisble, for y-axis range
+p
+ggsave(filename = "output/plots/shortcut_A_uncertainty_risk_steps.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+### add catch maxima
+p + geom_tile(data = stats_unc_max,
+              aes(x = Btrigger, y = Ftrgt, fill = uncertainty, group = uncertainty), 
+              width = 10000, height = 0.01,
+              linetype = 0) +
+  scale_fill_gradientn("uncertainty", 
+                       colours = c(scales::hue_pal()(6)),
+                       values = c(0, 0.1, 0.2, 0.3, 0.5, 1)) +
+  geom_line(data = stats_unc_step %>%
+              filter(obs_rho == obs_rho_def & obs_sd == obs_sd_def),
+            aes(linetype = "default"),
+            colour = "black", show.legend = TRUE) +
+  geom_tile(data = stats_unc_max %>%
+              filter(obs_rho == obs_rho_def & obs_sd == obs_sd_def),
+            aes(x = Btrigger, y = Ftrgt), 
+            width = 10000, height = 0.01, linetype = 0, fill = "black") +
+  geom_text(data = stats_unc_max,
+            aes(x = Btrigger, y = Ftrgt, label = round(uncertainty, 2)), 
+            colour = "white", size = 1.2, check_overlap = TRUE)
+ggsave(filename = "output/plots/shortcut_A_uncertainty_risk_steps_2.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
 
