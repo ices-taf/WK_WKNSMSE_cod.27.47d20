@@ -21,7 +21,7 @@ al., 2017](https://ec.europa.eu/jrc/en/publication/assessment-all-initiativea4a-
 ## Disclaimer
 
 The content of this repository is licensed under the GNU General Public
-License v3.0, see [`LICENCE`](LICENCE) for more information. The content
+License v3.0, see [`LICENSE`](LICENSE) for more information. The content
 in this repository is provided as is, without any support by the
 contributors listed in this GitHub repository.
 
