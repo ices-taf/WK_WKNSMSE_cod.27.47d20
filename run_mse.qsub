@@ -6,7 +6,7 @@
 ## select number of nodes, cpus (per node) and memory (per node)
 #PBS -l select=1:ncpus=24:mpiprocs=24:ompthreads=1:mem=120gb 
 ## send mail when job aborts/begins/ends
-#PBS -M s.fischer18@imperial.ac.uk
+###PBS -M xx@xx.xx
 #PBS -m abe 
 ## standard output standard error
 #PBS -o reports

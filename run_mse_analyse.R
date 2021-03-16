@@ -298,7 +298,10 @@ saveRDS(object = stats_full, file = paste0(path_res, "stats_full.rds"))
 write.csv(x = stats_full, file = paste0("output/stats_full.csv"), 
           row.names = FALSE)
 stats_full <- readRDS(paste0(path_res, "stats_full.rds"))
-
+stats_full_A <- stats_full %>%
+  filter(HCR == "A" & BB == FALSE & TACconstr == FALSE &
+           Ftrgt %in% round(seq(0, 1, 0.01), 2) & OM == "cod4")
+saveRDS(object = stats_full_A, file = paste0(path_res, "stats_full_HCR-A.rds"))
 ### ------------------------------------------------------------------------ ###
 ### plot ####
 ### ------------------------------------------------------------------------ ###
