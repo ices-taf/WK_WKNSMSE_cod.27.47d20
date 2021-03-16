@@ -8,12 +8,22 @@ WK\_WKNSMSE\_cod.27.47d20
 This repository contains the Management Strategy Evaluation (MSE) for
 North Sea cod (Cod (*Gadus morhua*) in Subarea 4, Division 7.d, and
 Subdivision 20 (North Sea, eastern English Channel, Skagerrak),
-cod.27.47d20) conducted in 2018/2019 for WKNSMSE. The simulation is
-based on the Fisheries Library in R ([FLR](http://www.flr-project.org/))
-and makes use of the Assessment for All (a4a) standard MSE framework
-([`FLR/mse`](github.com/FLR/mse)) developed during the Workshop on
-development of MSE algorithms with R/FLR/a4a ([Jardim et
+cod.27.47d20) conducted in 2018/2019 for ICES WKNSMSE
+(<https://doi.org/10.17895/ices.pub.5090>).
+
+The simulation is based on the Fisheries Library in R
+([FLR](http://www.flr-project.org/)) and makes use of the Assessment for
+All (a4a) standard MSE framework ([`FLR/mse`](github.com/FLR/mse))
+developed during the Workshop on development of MSE algorithms with
+R/FLR/a4a ([Jardim et
 al., 2017](https://ec.europa.eu/jrc/en/publication/assessment-all-initiativea4a-workshop-development-mse-algorithms-rflra4a)).
+
+## Disclaimer
+
+The content of this repository is licensed under the GNU General Public
+License v3.0, see [`LICENSE`](LICENSE) for more information. The content
+in this repository is provided as is, without any support by the
+contributors listed in this GitHub repository.
 
 ## Repository structure
 
