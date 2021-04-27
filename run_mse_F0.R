@@ -6,19 +6,19 @@ input <- readRDS("input/cod4/1000_20/base_run.rds")
 input$oem <- FLoem(observations = list(stk = FLQuant(0)), 
                    deviances = list(stk = FLQuant(0)))
 ### fixed F=0 target
-input$ctrl.mp <- mpCtrl(list(ctrl.hcr = mseCtrl(method = fixedF.hcr,
+input$ctrl <- mpCtrl(list(hcr = mseCtrl(method = fixedF.hcr,
                                                 args = list(ftrg = 0))))
 ### use one block, no parallelisation
 ### (this is ok here, because the only stochastic part -SAM forecast- is not used)
-input$genArgs$nblocks <- 1
+input$args$nblocks <- 1
 
 ### run as usual
 ### (should not take more than a few minutes on one core)
 res1 <- mp(om = input$om,
            oem = input$oem,
            iem = input$iem,
-           ctrl.mp = input$ctrl.mp,
-           genArgs = input$genArgs,
+           ctrl = input$ctrl,
+           args = input$args,
            tracking = input$tracking)
 
 ### save
