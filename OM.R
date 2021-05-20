@@ -1,3 +1,4 @@
+.libPaths(c("library", .libPaths()))
 ### ------------------------------------------------------------------------ ###
 ### create FLStock for cod ####
 ### ------------------------------------------------------------------------ ###
@@ -21,7 +22,7 @@ library(FLAssess)
 library(mse)
 ### load files from package mse for easier debugging
 # devtools::load_all("../mse/")
-library(FLash)
+library(FLasher)
 library(tidyr)
 library(dplyr)
 library(doParallel)
@@ -45,7 +46,7 @@ if (getRversion() >= 3.6) RNGkind(sample.kind = "Rounding")
 ### ------------------------------------------------------------------------ ###
 
 ### number of iterations/replicates
-n <- 1000
+n <- 10
 ### number of years
 n_years <- 20
 ### last data year
@@ -280,7 +281,7 @@ catch_n[dimnames(catch_mult)$age, dimnames(catch_mult)$year] <-
 ### although SAM estimates F in 2018, this is not reported or taken forward into
 ### forcasts by the WG
 # stk_stf2017 <- stf(window(stk, end = 2017), n_years + 1)
-stk_stf2018 <- stf(window(stk, end = 2018), n_years)
+stk_stf2018 <- stf(window(stk, end = 2018), nyears = n_years)
 ### use all available data
 stk_stf <- stk_stf2018
 
@@ -325,6 +326,12 @@ mat(stk_stf)[, bio_yrs] <- c(mat(stk)[, bio_samples,,,, 1])
 mat(stk_stf)[, ac(2018)] <- mat(stk_orig)[, ac(2018)]
 ### use different samples for selectivity
 harvest(stk_stf)[, bio_yrs] <- c(harvest(stk)[, sel_samples,,,, 1])
+
+### discard rate (not used in projection, but needs to be defined)
+discards.n(stk_stf)[, bio_yrs] <- apply(
+  discards.n(stk_stf)[, ac(2016:2018)] / catch.n(stk_stf)[, ac(2016:2018)], 
+  c(1,3:6), mean, na.rm = TRUE)
+landings.n(stk_stf)[, bio_yrs] <- 1 - discards.n(stk_stf)[, bio_yrs]
 
 if (isTRUE(verbose)) plot(stk_stf)
 
@@ -509,13 +516,15 @@ if (isTRUE(verbose)) plot(proc_res)
 ### stf for 2018: assume catch advice is taken ####
 ### ------------------------------------------------------------------------ ###
 c2018 <- 53058
-ctrl <- fwdControl(data.frame(year = 2018, quantity = "catch", 
-                              val = c2018))
+ctrl <- fwdControl(data.frame(year = 2018, 
+                              quant = "catch", 
+                              value = c2018))
 
 ### project forward for intermediate year (2018)
 stk_int <- stk_stf
-stk_int[] <- fwd(stk_stf, ctrl = ctrl, sr = sr, sr.residuals = sr_res,
-                 sr.residuals.mult = TRUE, maxF = 5)[]
+stk_int[] <- fwd(stk_stf, control = ctrl, sr = sr, deviances = sr_res,
+                 maxF = 5)[]
+
 ### add process noise
 stock.n(stk_int) <- stock.n(stk_int) * proc_res
 stock(stk_int)[] <- computeStock(stk_int)
@@ -830,13 +839,30 @@ saveRDS(object = input,
 ### run MSE
 ### WARNING: takes a while...
 ### check normal execution
-# res1 <- mp(om = input$om,
-#            oem = input$oem,
-#            #iem = iem,
-#            ctrl = input$ctrl,
-#            args = input$args,
-#            tracking = input$tracking)
-
+if (FALSE) {
+  .libPaths(c("library", .libPaths()))
+  library(FLfse)
+  library(stockassessment)
+  library(ggplotFL)
+  library(mse)
+  library(FLasher)
+  library(tidyr)
+  library(dplyr)
+  library(doParallel)
+  load("input/cod4/10_20/image.RData")
+  input <- readRDS(paste0(input_path, "/base_run.rds"))
+  debugonce(goFish)
+  input$ctrl$isys@args$TAC_constraint <- TRUE
+  input$ctrl$isys@args$lower <- 80
+  input$ctrl$isys@args$upper <- 120
+  set.seed(1)
+  res1 <- mp(om = input$om,
+             oem = input$oem,
+             #iem = iem,
+             ctrl = input$ctrl,
+             args = input$args,
+             tracking = input$tracking)
+}
 # debugonce(mp)
 # debugonce(goFish)
 # res1 <- mp(om = input$om,
