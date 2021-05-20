@@ -555,7 +555,7 @@ hcr_WKNSME <- function(stk, args, hcrpars, tracking,
 ### including TAC constraint
 is_WKNSMSE <- function(stk, tracking, ctrl,
                        args, ### contains ay (assessment year)
-                       TAC_constraint = c(FALSE, TRUE),
+                       TAC_constraint = FALSE,
                        upper = Inf, lower = -Inf, Btrigger_cond = FALSE,
                        ### short term forecast
                        fwd_trgt = c("fsq", "hcr"), ### target in forecast
@@ -604,7 +604,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### get recent TAC
   if (args$iy == ay) {
     ### in first year of simulation, use value from OM saved earlier in ay
-    TAC_last <- tracking["metric.is", ac(ay)]
+    TAC_last <- tracking["C.om", ac(ay)]
   } else {
     ### in following years, use TAC advised the year before
     TAC_last <- tracking["metric.is", ac(ay - 1)]
@@ -627,7 +627,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     ### scaled F
     fscale <- ifelse(fwd_trgt == "fsq", 1, NA)
     ### target F values
-    fval <- ifelse(fwd_trgt == "hcr", ctrl@trgtArray[, "val", iter_i], NA)
+    fval <- ifelse(fwd_trgt == "hcr", ctrl$value[iter_i], NA)
     ### target catch values
     catchval <- ifelse(fwd_trgt == "TAC", c(TAC_last[,,,,, iter_i]), NA)
     
@@ -685,18 +685,11 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   ### TAC constraint ####
   if (isTRUE(TAC_constraint)) {
     
-    ### target year
-    yr_target <- ctrl@target$year
-    
-    ### get previous target from tracking
-    if (args$iy == ay) {
-      catch_prev <- TAC_last
-    } else {
-      catch_prev <- tracking["metric.is", ac(yr_target - 1), drop = TRUE]
-    }
+    ### last advice
+    advice_last <- TAC_last[, drop = TRUE]
     
     ### change in advice, % of last advice
-    change <- (catch_target / catch_prev) * 100
+    change <- (catch_target / advice_last) * 100
     
     ### limit changes
     changes_new <- change
@@ -730,7 +723,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
     }
     
     ### modify advice
-    catch_target[pos] <- catch_prev[pos] * changes_new[pos]/100
+    catch_target[pos] <- advice_last[pos] * changes_new[pos]/100
     
   }
   
@@ -913,7 +906,7 @@ is_WKNSMSE <- function(stk, tracking, ctrl,
   
   ### create ctrl object
   ctrl <- getCtrl(values = catch_target, quantity = "catch", 
-                  years = ctrl@target$year, it = it)
+                  years = ctrl$year, it = it)
   
   ### return catch target and tracking
   return(list(ctrl = ctrl, tracking = tracking))
@@ -948,14 +941,14 @@ iem_WKNSMSE <- function(tracking, ctrl,
     BB_borrow <- ifelse(!is.na(BB_borrow), BB_borrow, 0)
     
     ### get catch target(s)
-    catch_target <- ctrl@trgtArray[, "val", ]
+    catch_target <- ctrl$value
     
     ### implement B&B
     catch_target <- catch_target - c(BB_return) + c(BB_bank_use) - 
       c(BB_bank) + c(BB_borrow)
     
     ### save in ctrl object
-    ctrl@trgtArray[, "val", ] <- catch_target
+    ctrl$value <- catch_target
     
   }
   
@@ -972,8 +965,8 @@ iem_WKNSMSE <- function(tracking, ctrl,
 
 fwd_WKNSMSE <- function(stk, ctrl,
                         sr, ### stock recruitment model
-                        sr.residuals, ### recruitment residuals
-                        sr.residuals.mult = TRUE, ### are res multiplicative?
+                        deviances, ### recruitment residuals
+                        #sr.residuals.mult = TRUE, ### are res multiplicative?
                         maxF = 2, ### maximum allowed Fbar
                         proc_res = NULL, ### process error noise,
                         dd_M = NULL, relation = NULL, ### density-dependent M
@@ -983,21 +976,20 @@ fwd_WKNSMSE <- function(stk, ctrl,
   if (!is.null(dd_M)) {
     
     ### overwrite m in the target year before projecting forward
-    m(stk)[, ac(ctrl@target[, "year"])] <- calculate_ddM(stk, ctrl@target[, "year"], relation = relation)
+    m(stk)[, ac(ctrl$year)] <- calculate_ddM(stk, ctrl$year, relation = relation)
     
   }
   
-  ### project forward with FLash::fwd
+  ### project forward with FLasher::fwd
   stk[] <- fwd(object = stk, control = ctrl, sr = sr, 
-               sr.residuals = sr.residuals, 
-               sr.residuals.mult = sr.residuals.mult,
+               deviances = deviances,
                maxF = maxF)
   
   ### add process error noise, if supplied
   if (!is.null(proc_res)) {
     
     ### projected years
-    yrs_new <- seq(from = ctrl@target[, "year"], to = range(stk)[["maxyear"]])
+    yrs_new <- seq(from = ctrl$year, to = range(stk)[["maxyear"]])
     
     ### workaround to get residuals
     ### they are saved in the "fitted" slot of sr...
