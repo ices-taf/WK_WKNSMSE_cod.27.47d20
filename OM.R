@@ -1,4 +1,4 @@
-.libPaths(c("library", .libPaths()))
+#.libPaths(c("library", .libPaths()))
 ### ------------------------------------------------------------------------ ###
 ### create FLStock for cod ####
 ### ------------------------------------------------------------------------ ###
@@ -840,7 +840,7 @@ saveRDS(object = input,
 ### WARNING: takes a while...
 ### check normal execution
 if (FALSE) {
-  .libPaths(c("library", .libPaths()))
+  #.libPaths(c("library", .libPaths()))
   library(FLfse)
   library(stockassessment)
   library(ggplotFL)

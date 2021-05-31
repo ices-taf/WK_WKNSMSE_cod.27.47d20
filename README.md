@@ -1,7 +1,7 @@
 WK\_WKNSMSE\_cod.27.47d20
 ================
 
-# a4a cod4 MSE - updated for FLR mse 2.0
+# WKNSMSE cod4 MSE - updated for the FLasher branch of flr/mse
 
 ## Introduction
 
@@ -52,15 +52,14 @@ and the following subdirectories:
 The MSE simulation was run on a high performance computing cluster:
 
 ``` r
-sessionInfo()
-R version 3.6.1 (2019-07-05) -- "Action of the Toes"
-Platform: x86_64-conda_cos6-linux-gnu (64-bit)
-Running under: CentOS Linux release 7.8.2003 (Core)
+R version 4.1.0 (2021-05-18)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19041)
 ```
 
 The framework uses FLR and requires the following FLR packages:
 
-  - `FLCore` 2.6.14.9004
+  - `FLCore` 2.6.15
   - `FLash` 2.5.11
   - `FLBRP` 2.5.3
   - `FLAssess` 2.6.3
@@ -71,25 +70,25 @@ The FLR package versions as used for the simulation can be installed
 with `devtools`:
 
 ``` r
-devtools::install_github(repo = "flr/FLCore", ref = "3d694903b9e6717b86c3e8486fc14ebf92908786")
-devtools::install_github(repo = "flr/FLash", ref = "7c47560cf57627068259404bb553f2b644682726")
-devtools::install_github(repo = "flr/FLBRP", ref = "5644cfccefb0ec3965b1d028090bbf75b1e59da2")
-devtools::install_github(repo = "flr/FLAssess", ref = "f1e5acb98c106bcdfdc81034f1583f76bb485514")
-devtools::install_github(repo = "flr/ggplotFL", ref = "e9e0d74e872815c1df3f172522da35ade5c70638")
-devtools::install_github(repo = "shfischer/mse", ref = "18ce8c8d51362d5ced27b6c5978912f6da0ab5dc")
+devtools::install_github(repo = "flr/FLCore")
+devtools::install_github(repo = "shfischer/FLasher", ref = "64a539786eeca08fb273302be3a920dd176dc158")
+devtools::install_github(repo = "flr/FLBRP")
+devtools::install_github(repo = "flr/FLAssess")
+devtools::install_github(repo = "flr/ggplotFL")
+devtools::install_github(repo = "shfischer/mse", ref = "a60f7dfc0637db8da17e829ec880f33a789914bc")
 ```
 
 The cod MSE uses SAM as stockassessment method and requires the
 [`stockassessment`](https://github.com/fishfollower/SAM/) R package from
 GitHub:
 
-  - `stockassessment` 0.9.0
+  - `stockassessment` 0.11.0
 
 Install this version with
 
 ``` r
 install.packages("TMB") ### required to use stockassessment
-devtools::install_github("fishfollower/SAM/stockassessment", ref = "a882a11bf2ec890beb034ca173c15831a74f500d")
+devtools::install_github("fishfollower/SAM/stockassessment")
 ```
 
 In order to use SAM within FLR, the functionality of the inofficial
@@ -100,7 +99,7 @@ package `FLfse` is used:
 <!-- end list -->
 
 ``` r
-devtools::install_github("shfischer/FLfse/FLfse", ref = "1a88bffb9f87410439fbfb1c4678c50a631fea9c")
+devtools::install_github("shfischer/FLfse/FLfse")
 ```
 
 This package also contains the latest data for cod and can recreate the
