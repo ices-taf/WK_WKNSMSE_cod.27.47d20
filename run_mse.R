@@ -44,9 +44,7 @@ library(stockassessment)
 library(ggplotFL)
 #library(FLAssess)
 library(mse)
-### load files from package mse for easier debugging
-#devtools::load_all("../mse/")
-library(FLash)
+library(FLasher)
 library(tidyr)
 library(dplyr)
 library(foreach)
@@ -80,13 +78,16 @@ if (par_env == 1) {
   registerDoParallel(cl)
   cl_length <- length(cl)
   
+} else {
+  cl <- NULL
+  cl_length <- 0
 }
 
 ### load packages and functions into workers
 . <- foreach(i = seq(cl_length)) %dopar% {
   #devtools::load_all("../mse/")
   library(mse)
-  library(FLash)
+  library(FLasher)
   library(FLfse)
   library(stockassessment)
   library(foreach)
