@@ -6,6 +6,8 @@ library(ggplot2)
 library(tidyr)
 library(cowplot)
 library(dplyr)
+library(ggnewscale)
+library(mse)
 
 ### load additional functions
 source("a4a_mse_WKNSMSE_funs.R")
@@ -333,7 +335,7 @@ ggsave(filename = "output/plots/default_SAM_vs_shortcut_grid_A_3.png",
        width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
 
 ### ------------------------------------------------------------------------ ###
-### alternative OMs - grids ####
+### shortcut: alternative OMs - grids ####
 ### ------------------------------------------------------------------------ ###
 stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
 stats_OMs <- stats_short %>% 
@@ -539,8 +541,8 @@ ggsave(filename = "output/plots/OM3_SAM_vs_shortcut_grid_A_2.png",
 ### results
 stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
 ### default uncertainty values
-obs_sd_def <- readRDS(paste0(path_data, "obs_sd.rds"))
-obs_rho_def <- readRDS(paste0(path_data, "obs_rho.rds"))
+obs_sd_def <- readRDS(paste0("input/cod4/1000_20/", "obs_sd.rds"))
+obs_rho_def <- readRDS(paste0("input/cod4/1000_20/", "obs_rho.rds"))
 
 stats_unc <- stats_short %>%
   filter(!is.na(obs_sd) & !is.na(obs_rho)) %>% 
@@ -628,4 +630,219 @@ p + geom_tile(data = stats_unc_max,
             colour = "white", size = 1.2, check_overlap = TRUE)
 ggsave(filename = "output/plots/shortcut_A_uncertainty_risk_steps_2.png", 
        width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+
+
+### ------------------------------------------------------------------------ ###
+### compare OM vs. MP for full & shortcut ####
+### ------------------------------------------------------------------------ ###
+
+res_full <- readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds")
+inp_full <- readRDS("../WK_WKNSMSE_cod.27.47d20/input/cod4/1000_20/base_run.rds")
+res_shortcut <- readRDS("output/runs/cod4/1000_20/MP_cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds")
+inp_shortcut <- readRDS("input/cod4/1000_20/base_run.rds")
+
+res_combined <- foreach(scenario = c("full", "shortcut"),
+        inp = list(inp_full, inp_shortcut),
+        res = list(res_full, res_shortcut),
+        .combine = bind_rows) %do% {
+          #browser()
+  tmp <- FLQuant(NA, dimnames = list(
+    metric = c("F.om", "SSB.om", "F.est", "SSB.est", "F", "SSB"), 
+    year = dimnames(inp$om@stock)$year,
+    iter = dimnames(inp$om@stock)$iter))
+  yrs <- ac(an(dimnames(res@tracking)$year))[-1]
+  yrs1 <- ac(an(dimnames(res@tracking)$year) - 1)[-1]
+  tmp["F.est", yrs1] <- 
+    res@tracking["F.est", yrs]
+  tmp["SSB.est", yrs1] <- 
+    res@tracking["B.est", yrs]
+  # tmp["SSB.om", dimnames(inp$om@stock)$year] <- ssb(inp$om@stock)
+  # tmp["F.om", dimnames(inp$om@stock)$year] <- fbar(inp$om@stock)
+  # tmp["SSB.om", dimnames(res@stock)$year] <- ssb(res@stock)
+  # tmp["F.om", dimnames(res@stock)$year] <- fbar(res@stock)
+  tmp["SSB.om", dimnames(inp$om@stock)$year] <- ssb(inp$om@stock)
+  tmp["F.om", dimnames(inp$om@stock)$year] <- fbar(inp$om@stock)
+  tmp["SSB.om", dimnames(res@stock)$year] <- ssb(res@stock)
+  tmp["F.om", dimnames(res@stock)$year] <- fbar(res@stock)
+  tmp["SSB"] <- tmp["SSB.est"] / tmp["SSB.om"]
+  tmp["F"] <- tmp["F.est"] / tmp["F.om"]
+  tmp <- cbind(as.data.frame(tmp), scenario = scenario)
+  tmp <- tmp[!is.na(tmp$data) & is.finite(tmp$data), ]
+  return(tmp)
+}
+res_combined <- res_combined %>% group_by(metric, year, scenario) %>%
+  summarise(X0.05 = quantile(data, probs = 0.05),
+            X0.25 = quantile(data, probs = 0.25),
+            X0.50 = quantile(data, probs = 0.50),
+            X0.75 = quantile(data, probs = 0.75),
+            X0.95 = quantile(data, probs = 0.95))
+ggplot(data = res_combined %>% filter(metric %in% c("F", "SSB")),
+       aes(x = year, y = X0.50)) +
+  geom_ribbon(aes(ymin = X0.05, ymax = X0.95), alpha = 0.3, fill = "#F8766D",
+              show.legend = FALSE) +
+  geom_ribbon(aes(ymin = X0.25, ymax = X0.75), alpha = 0.6, fill = "#F8766D",
+              show.legend = FALSE) +
+  geom_line(show.legend = FALSE) +
+  facet_grid(scenario ~ metric) +
+  theme_bw() +
+  geom_hline(yintercept = 1, alpha = 0.5) +
+  labs(y = "MP value / OM value")
+ggsave(filename = paste0("output/runs/cod4/1000_20/plots/altOMs_stats/", 
+                         "MP_vs_OM.png"), 
+       width = 20, height = 20, units = "cm", dpi = 300, type = "cairo")
+
+
+### ------------------------------------------------------------------------ ###
+### assessment error from full MSE ####
+### ------------------------------------------------------------------------ ###
+library(FLfse)
+library(stockassessment)
+library(doParallel)
+cl <- makeCluster(24)
+registerDoParallel(cl)
+cl_length <- length(cl)
+
+### load packages and functions into workers
+. <- foreach(i = seq(cl_length)) %dopar% {
+  #devtools::load_all("../mse/")
+  library(mse)
+  library(tidyr)
+  library(dplyr)
+  library(stockassessment)
+  library(FLfse)
+  library(doParallel)
+  source("a4a_mse_WKNSMSE_funs.R")
+}
+
+combs <- data.frame(Btrigger = c(110000, 110000, 150000, 190000, 190000),
+                    Ftrgt = c(0.1, 0.5, 0.31, 0.1, 0.5))
+#combs <- combs[1, ]
+
+. <- foreach(comb = split(combs, seq(nrow(combs)))) %do% {
+  inp_full <- readRDS(paste0("../WK_WKNSMSE_cod.27.47d20/input/cod4/1000_20/",
+                             "base_run.rds"))
+  names(inp_full$oem@deviances$stk) <- "catch.n"
+  res_full <- readRDS(paste0("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/",
+                             "1000_20/cod4_HCR-A_Ftrgt-", comb$Ftrgt, 
+                             "_Btrigger-", comb$Btrigger, 
+                             "_TACconstr-FALSE_BB-FALSE.rds"))
+  stk <- inp_full$om@stock
+  yrs <- dimnames(res_full@stock)$year
+  stk[, yrs] <- res_full@stock
+
+  ### generate observations
+  obs <- oem_WKNSMSE(stk = stk, 
+                     deviances = inp_full$oem@deviances, 
+                     observations = inp_full$oem@observations, 
+                     args = list(ay = 2037), tracking = res_full@tracking, 
+                     catch_timing = -1, stk_timing = 0, idx_timing = c(0, -1), 
+                     use_catch_residuals = TRUE, use_idx_residuals = TRUE, 
+                     use_stk_oem = TRUE, shortcut = FALSE)
+  
+  ### fit SAM
+  cod4_conf_sam_no_mult <- cod4_conf_sam[!names(cod4_conf_sam) %in% 
+                                           c("noScaledYears", "keyScaledYears",
+                                             "keyParScaledYA")]
+  its <- 1:100
+  # fits <- FLR_SAM(stk = iter(obs$stk, its), idx = iter(obs$idx, its), 
+  #                 conf = cod4_conf_sam_no_mult)
+  fits_fast <- FLR_SAM(stk = iter(obs$stk, its), idx = iter(obs$idx, its), 
+                  conf = cod4_conf_sam_no_mult, newtonsteps = 0, rel.tol = 0.001)
+  saveRDS(fits_fast, paste0("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/",
+                            "1000_20/fits_fast_cod4_HCR-A_Ftrgt-", comb$Ftrgt, 
+                            "_Btrigger-", comb$Btrigger, 
+                            "_TACconstr-FALSE_BB-FALSE.rds"))
+  
+  # summary(fits_fast)/summary(fits)
+  # plot(FLStocks(OM = stk[,,,,, 2], MP = SAM2FLStock(fits, catch_estimate = TRUE),
+  #               MP_fast = SAM2FLStock(fits_fast, catch_estimate = TRUE)))
+  
+  ### retro
+  retros_fast <- foreach(fit = fits_fast) %dopar% {
+    . <- capture.output(out <- retro(fit = fit, year = 20, ncores = 0, 
+                                     newtonsteps = 0, rel.tol = 0.001))
+    return(out)
+  }
+  saveRDS(retros_fast, paste0("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/",
+                          "1000_20/retros_fast_cod4_HCR-A_Ftrgt-", comb$Ftrgt, 
+                          "_Btrigger-", comb$Btrigger, 
+                          "_TACconstr-FALSE_BB-FALSE.rds"))
+  
+  ssb_table <- function(x) {
+    tmp <- data.frame(SSB = ssbtable(x)[, "Estimate"])
+    tmp$year <- as.numeric(rownames(tmp))
+    rownames(tmp) <- NULL
+    tmp$assessment <- max(tmp$year)
+    return(tmp)
+  }
+  retro_SSB <- lapply(its, function(x) {
+    tmp <- lapply(retros_fast[[x]], ssb_table)
+    tmp <- do.call(rbind, tmp)
+    tmp$iter <- x
+    return(tmp)
+  })
+  retro_SSB <- do.call(rbind, retro_SSB)
+  
+  fit_SSB <- lapply(its, function(x) {
+    cbind(ssb_table(fits_fast[[x]]), iter = x)
+  })
+  fit_SSB <- do.call(rbind, fit_SSB)
+  fit_SSB <- fit_SSB %>%
+    mutate(SSB_final = SSB, SSB = NULL, assessment = NULL)
+  
+  SSB_error <- retro_SSB %>%
+  filter(year == assessment) %>%
+  mutate(SSB_retro = SSB, 
+         SSB = NULL, 
+         assessment = NULL) %>%
+  left_join(fit_SSB) %>%
+  mutate(SSB_ratio = SSB_retro/SSB_final)
+  SSB_error$Ftrgt <- comb$Ftrgt
+  SSB_error$Btrigger <- comb$Btrigger
+  saveRDS(SSB_error, paste0("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/",
+                          "1000_20/table_cod4_HCR-A_Ftrgt-", comb$Ftrgt, 
+                          "_Btrigger-", comb$Btrigger, 
+                          "_TACconstr-FALSE_BB-FALSE.rds"))
+  
+}
+
+
+SSB_error <- bind_rows(
+  readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/table_cod4_HCR-A_Ftrgt-0.1_Btrigger-110000_TACconstr-FALSE_BB-FALSE.rds"),
+  readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/table_cod4_HCR-A_Ftrgt-0.1_Btrigger-190000_TACconstr-FALSE_BB-FALSE.rds"),
+  readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/table_cod4_HCR-A_Ftrgt-0.31_Btrigger-150000_TACconstr-FALSE_BB-FALSE.rds"),
+  readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/table_cod4_HCR-A_Ftrgt-0.5_Btrigger-110000_TACconstr-FALSE_BB-FALSE.rds"),
+  readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/table_cod4_HCR-A_Ftrgt-0.5_Btrigger-190000_TACconstr-FALSE_BB-FALSE.rds")
+  )
+
+
+### SD by iter
+SSB_error %>% 
+  mutate(level = paste0("Ftrgt=", Ftrgt, " & Btrigger=", Btrigger/1000)) %>%
+  group_by(iter, level) %>%
+  summarise(SD = sd(SSB_ratio)) %>%
+  ggplot(aes(x = SD)) +
+  geom_histogram(aes(y = stat(count)/sum(count)), fill = "black") +
+  theme_bw(base_size = 8) +
+  facet_wrap(~ level) +
+  xlim(c(0, NA)) +
+  labs(y = "frequency")
+SSB_error %>% 
+  mutate(level = paste0("Ftrgt=", Ftrgt, " & Btrigger=", Btrigger/1000)) %>%
+  group_by(level) %>%
+  summarise(SD = sd(SSB_ratio))
+### total SD
+SSB_error %>%
+  summarise(SD = sd(SSB_ratio))
+
+### autocorrelation by iter
+SSB_error %>% 
+  group_by(iter) %>%
+  summarise(rho = c(acf(SSB_ratio)$acf[2])) %>%
+  ggplot(aes(x = rho)) +
+  geom_histogram(aes(y = stat(count)/sum(count)), fill = "black") +
+  theme_bw(base_size = 8) +
+  #xlim(c(0, NA)) +
+  labs(y = "frequency")
+
 
