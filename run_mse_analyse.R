@@ -7,6 +7,7 @@ library(tidyr)
 library(cowplot)
 library(dplyr)
 library(ggnewscale)
+library(patchwork)
 library(mse)
 
 ### load additional functions
@@ -846,3 +847,330 @@ SSB_error %>%
   labs(y = "frequency")
 
 
+### ------------------------------------------------------------------------ ###
+### 2025 - comparison of full MSE with shortcut - cod ####
+### ------------------------------------------------------------------------ ###
+
+stats_full <- readRDS("../WK_WKNSMSE_cod.27.47d20/output/runs/cod4/1000_20/stats_full.rds")
+stats_full <- stats_full %>%
+  filter(OM == "cod4" & HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  filter(!Ftrgt %in% c(0.198, 0.333, 0.342, 0.407, 0.418)) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(type = "full", stock = "Cod")
+# sort(unique(stats_full$Ftrgt))
+# sort(unique(stats_full$Btrigger))
+# length(sort(unique(stats_full$Ftrgt)))
+# length(sort(unique(stats_full$Btrigger)))
+# nrow(stats_full)
+
+stats_short <- readRDS("output/runs/cod4/1000_20/stats_combined.rds")
+stats_short <- stats_short %>%
+  filter(OM == "cod4" & HCR == "A" & TACconstr == FALSE & BB == FALSE &
+           is.na(obs_sd)) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(type = "shortcut", stock = "Cod")
+
+stats_combined <- bind_rows(stats_full, stats_short) %>%
+  group_by(stock, type) %>%
+  mutate(catch_rel = ifelse(risk3_long <= 0.05, catch_long, NA)) %>%
+  mutate(catch_rel = catch_rel/max(catch_rel, na.rm = TRUE)) %>%
+  mutate(catch_col = ifelse(risk3_long <= 0.05, catch_rel, NA)) %>%
+  mutate(type = factor(type, levels = c("full", "shortcut"),
+                       labels = c("Full MSE", "Shortcut MSE")))
+### catch optimum
+stats_optima <- stats_combined %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_rel == max(catch_rel)) %>%
+  mutate(type_col = type)
+### duplicate shortcut optimum to inclue in full MSE plot
+stats_optima <- stats_optima %>%
+  bind_rows(stats_optima %>%
+              filter(type == "Shortcut MSE") %>%
+              mutate(type = "Full MSE"))
+
+p_cod <- stats_combined %>%
+  ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
+  geom_tile(alpha = 0.8) +
+  scale_fill_gradientn(paste0("Catch\n(relative)"),
+                       colours = hcl.colors(10),
+                       values = c(0, 0.4, 0.6, 0.8, 0.85, 0.9, 0.94, 0.96, 0.98,
+                                  1), 
+                       breaks = c(0.6, 0.7, 0.8, 0.9), na.value = "salmon") +
+  geom_point(data = stats_optima,
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
+             shape = 3, stroke = 0.7, size = 5) +
+  # geom_vline(data = stats_optima,
+  #            aes(xintercept = Btrigger, colour = type_col),
+  #            linewidth = 0.4, linetype = "1111") +
+  # geom_hline(data = stats_optima,
+  #            aes(yintercept = Ftrgt, colour = type_col),
+  #            linewidth = 0.4, linetype = "1111") +
+  scale_colour_manual("Optimum",
+                      values = c("Full MSE" = "black", 
+                                 "Shortcut MSE" = "blue")) +
+  labs(y = expression(F[target]), 
+       x = expression(B[trigger]~"(1000t)")) +
+  facet_grid(stock ~ type) + 
+  scale_x_continuous(breaks = seq(120, 210, by = 20)) +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(strip.text = element_text(size = 8),
+        strip.text.y = element_text(angle = 90))
+p_cod
+ggsave(filename = "output/plots/shortcut/cod_full_vs_shortcut_grid.png", 
+       width = 17, height = 8, units = "cm", dpi = 600, type = "cairo")
+
+p_cod <- p_cod +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none")
+p_cod
+
+
+### ------------------------------------------------------------------------ ###
+### 2025 - comparison of full MSE with shortcut - gadoids ####
+### ------------------------------------------------------------------------ ###
+
+### saithe
+stats_full_saithe <- read.csv("output/saithe_full_stats.csv")
+stats_full_saithe <- stats_full_saithe %>%
+  filter(OM == "base" & HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  ### remove cells outside standard grid
+  filter(!Ftrgt %in% c(0.315, 0.385, 0.536)) %>%
+  filter(Ftrgt >= 0.2) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(type = "full", stock = "Saithe")
+
+stats_short_saithe <- read.csv("output/saithe_shortcut_stats.csv")
+stats_short_saithe <- stats_short_saithe %>%
+  filter(OM == "MP_saithe" & HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(type = "shortcut", stock = "Saithe")
+### sd = 0.04, rho=-0.12
+
+stats_combined_saithe <- bind_rows(stats_full_saithe, stats_short_saithe) %>%
+  group_by(stock, type) %>%
+  mutate(catch_rel = ifelse(risk3_long <= 0.05, catch_long, NA)) %>%
+  mutate(catch_rel = catch_rel/max(catch_rel, na.rm = TRUE)) %>%
+  mutate(catch_col = ifelse(risk3_long <= 0.05, catch_rel, NA)) %>%
+  mutate(type = factor(type, levels = c("full", "shortcut"),
+                       labels = c("Full MSE", "Shortcut MSE")))
+### catch optimum
+stats_optima_saithe <- stats_combined_saithe %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_rel == max(catch_rel)) %>%
+  mutate(type_col = type)
+### duplicate shortcut optimum to inclue in full MSE plot
+stats_optima_saithe <- stats_optima_saithe %>%
+  bind_rows(stats_optima_saithe %>%
+              filter(type == "Shortcut MSE") %>%
+              mutate(type = "Full MSE"))
+
+p_saithe <- stats_combined_saithe %>%
+  ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
+  geom_tile(alpha = 0.8) +
+  scale_fill_gradientn(paste0("Catch\n(relative)"),
+                       colours = hcl.colors(10),
+                       values = c(0, 0.4, 0.6, 0.8, 0.85, 0.9, 0.94, 0.96, 0.98,
+                                  1), 
+                       breaks = c(0.9, 0.95), na.value = "salmon") +
+  geom_point(data = stats_optima_saithe,
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
+             shape = 3, stroke = 0.7, size = 5) +
+  scale_colour_manual("Optimum",
+                      values = c("Full MSE" = "black", 
+                                 "Shortcut MSE" = "blue")) +
+  labs(y = expression(F[target]), 
+       x = expression(B[trigger]~"(1000t)")) +
+  facet_grid(stock ~ type) + 
+  scale_x_continuous(breaks = seq(140, 270, by = 20)) +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(strip.text = element_text(size = 8),
+        strip.text.y = element_text(angle = 90),
+        strip.text.x.top = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "none")
+p_saithe
+
+### whiting
+stats_full_whiting <- read.csv("output/whiting_full_stats.csv")
+stats_full_whiting <- stats_full_whiting %>%
+  filter(OM == 1 & HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  ### remove cells outside standard grid
+  filter(!Ftrgt %in% c(0.108, 0.126, 0.132, 0.135, 0.144, 0.154, 0.158, 
+                       0.165, 0.172, 0.176)) %>%
+  filter(Ftrgt >= 0.05) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(type = "full", stock = "Whiting")
+
+stats_short_whiting <- read.csv("output/whiting_shortcut_stats.csv")
+stats_short_whiting <- stats_short_whiting %>%
+  filter(OM == "MP_whiting" & HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  select(Ftrgt, Btrigger, catch_long = catch_median_long, risk3_long) %>%
+  mutate(type = "shortcut", stock = "Whiting")
+### sd = 0.17, rho=0.47
+
+stats_combined_whiting <- bind_rows(stats_full_whiting, stats_short_whiting) %>%
+  group_by(stock, type) %>%
+  mutate(catch_rel = ifelse(risk3_long <= 0.05, catch_long, NA)) %>%
+  mutate(catch_rel = catch_rel/max(catch_rel, na.rm = TRUE)) %>%
+  mutate(catch_col = ifelse(risk3_long <= 0.05, catch_rel, NA)) %>%
+  mutate(type = factor(type, levels = c("full", "shortcut"),
+                       labels = c("Full MSE", "Shortcut MSE")))
+### catch optimum
+stats_optima_whiting <- stats_combined_whiting %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_rel == max(catch_rel)) %>%
+  mutate(type_col = type)
+### duplicate shortcut optimum to inclue in full MSE plot
+stats_optima_whiting <- stats_optima_whiting %>%
+  bind_rows(stats_optima_whiting %>%
+              filter(type == "Shortcut MSE") %>%
+              mutate(type = "Full MSE"))
+
+p_whiting <- stats_combined_whiting %>%
+  ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
+  geom_tile(alpha = 0.8) +
+  scale_fill_gradientn(paste0("Catch\n(relative)"),
+                       colours = hcl.colors(10),
+                       values = c(0, 0.4, 0.6, 0.8, 0.85, 0.9, 0.94, 0.96, 0.98,
+                                  1), 
+                       breaks = seq(0.5, 1, 0.1), na.value = "salmon") +
+  geom_point(data = stats_optima_whiting,
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
+             shape = 3, stroke = 0.7, size = 5) +
+  scale_colour_manual("Optimum",
+                      values = c("Full MSE" = "black", 
+                                 "Shortcut MSE" = "blue")) +
+  labs(y = expression(F[target]), 
+       x = expression(B[trigger]~"(1000t)")) +
+  facet_grid(stock ~ type) + 
+  scale_x_continuous(breaks = seq(120, 260, by = 20)) +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(strip.text = element_text(size = 8),
+        strip.text.y = element_text(angle = 90),
+        strip.text.x.top = element_blank())
+p_whiting
+
+
+
+### combine 3 stocks
+p_cod + theme(legend.position = "none") + p_saithe + p_whiting + 
+  plot_layout(ncol = 1, guides = "collect")
+ggsave(filename = "output/plots/shortcut/gadoids_full_vs_shortcut_grid.png", 
+       width = 17, height = 10, units = "cm", dpi = 600)
+ggsave(filename = "output/plots/shortcut/gadoids_full_vs_shortcut_grid.pdf", 
+       width = 17, height = 10, units = "cm")
+
+
+### narrow plot
+p_cod + theme(legend.position = "none") + 
+  p_saithe + 
+    scale_x_continuous(breaks = seq(140, 270, by = 40)) +
+  p_whiting + 
+    scale_x_continuous(breaks = seq(120, 260, by = 40)) +
+    theme(legend.position = "bottom", legend.direction = "vertical") + 
+  plot_layout(ncol = 1)
+ggsave(filename = "output/plots/shortcut/gadoids_full_vs_shortcut_grid_narrow.png", 
+       width = 10, height = 14, units = "cm", dpi = 600)
+
+### summary of optima
+bind_rows(stats_optima[1:2, ],
+          stats_optima_saithe[1:2, ],
+          stats_optima_whiting[1:2, ])
+#   Ftrgt Btrigger catch_long risk3_long type         stock   catch_rel catch_col type_col    
+# 1  0.38   170000     54597.      0.036 Full MSE     Cod             1         1 Full MSE    
+# 2  0.39   160000     55204.      0.04  Shortcut MSE Cod             1         1 Shortcut MSE
+# 3  0.35   250000    116700       0.015 Full MSE     Saithe          1         1 Full MSE    
+# 4  0.43   240000    123492.      0.006 Shortcut MSE Saithe          1         1 Shortcut MSE
+# 5  0.14   220000     22832.      0.05  Full MSE     Whiting         1         1 Full MSE    
+# 6  0.14   210000     24325.      0.05  Shortcut MSE Whiting         1         1 Shortcut MSE
+
+
+
+
+stats_combined <- full_stats %>% 
+  mutate(assessment = "OM1: SAM") %>%
+  filter(Ftrgt %in% round(seq(0, 1, 0.01), 2)) %>%
+  bind_rows(stats_short %>% 
+              mutate(assessment = "OM1: shortcut") %>%
+              filter(is.na(obs_sd))
+  ) %>%
+  filter(OM == "cod4" &
+           HCR == "A" & TACconstr == FALSE & BB == FALSE) %>%
+  select(Ftrgt, Btrigger, catch_median_long, risk3_long, assessment) %>%
+  mutate(Ftrgt = round(Ftrgt, 2)) %>%
+  mutate(risk_pos = ifelse(risk3_long <= 0.05, "below", "above"))
+### find yield maximum
+stats_combined_max <- stats_combined %>%
+  group_by(assessment) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(catch_median_long == max(catch_median_long)) %>%
+  ungroup() %>%
+  mutate(assessment2 = assessment, assessment = NULL)
+stats_combined_max
+stats_combined_max_both <- stats_combined %>%
+  filter((Ftrgt == 0.38 & Btrigger == 170000) | 
+           (Ftrgt == 0.39 & Btrigger == 160000)) %>%
+  select(Ftrgt, Btrigger)
+# stats_combined <- stats_combined %>%
+#   full_join(stats_combined_max) %>%
+#   mutate(risk_pos = ifelse(!is.na(assessment2), "optimum", risk_pos),
+#          assessment2 = NULL)
+### Ftrgt steps where risk exceeds 5%
+stats_combined_step <- stats_combined %>%
+  group_by(assessment, Btrigger) %>%
+  filter(risk3_long <= 0.05) %>%
+  filter(risk3_long == max(risk3_long)) %>%
+  ungroup() %>%
+  arrange(Btrigger)
+stats_combined_step <- stats_combined_step %>%
+  mutate(Btrigger = Btrigger - 4999, Ftrgt = Ftrgt + 0.005) %>%
+  bind_rows(
+    stats_combined_step %>%
+      mutate(Btrigger = Btrigger + 4999, Ftrgt = Ftrgt + 0.005)) %>%
+  mutate(assessment2 = assessment, assessment = NULL)
+
+
+ggplot() +
+  geom_raster(data = stats_combined %>% 
+                filter(risk3_long <= 0.05) %>%
+                filter(catch_median_long >= 0.95 * max(catch_median_long)),
+              aes(x = Btrigger, y = Ftrgt, fill = catch_median_long)) +
+  scale_fill_gradient(paste0("yield maximum\narea [t]"), low = "red",
+                      high = "green") +
+  geom_text(data = stats_combined, 
+            aes(x = Btrigger, y = Ftrgt, 
+                label = round(catch_median_long), colour = risk3_long <= 0.05),
+            size = 1.2, show.legend = FALSE) +
+  scale_colour_manual("risk <= 0.05", 
+                      values = c("FALSE" = "red", "TRUE" = "black",
+                                 "OM1: SAM" = "black", "OM1: shortcut" = "blue")) +
+  geom_line(data = stats_combined_step, 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            show.legend = FALSE, size = 0.3) +
+  geom_tile(data = stats_combined_max, 
+            aes(x = Btrigger, y = Ftrgt, colour = assessment2),
+            width = 10000, height = 0.01,
+            alpha = 0, colour = "black", size = 0.3) +
+  geom_tile(data = data.frame(x = 170000, y = 0.38),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "black", linetype = 0) +
+  geom_tile(data = data.frame(x = 160000, y = 0.39),
+            aes(x = x, y = y), width = 10000, height = 0.01,
+            fill = "blue", linetype = 0) +
+  geom_text(data = stats_combined %>%
+              filter((Btrigger == 170000 & Ftrgt == 0.38) |
+                       (Btrigger == 160000 & Ftrgt == 0.39)),
+            aes(x = Btrigger, y = Ftrgt,
+                label = round(catch_median_long)),
+            size = 1.2, colour = "white", show.legend = FALSE) +
+  scale_linetype_discrete("optimum") + 
+  theme_bw() +
+  facet_wrap(~ assessment) +
+  scale_x_continuous(breaks = c(seq(from = 110000, to = 210000, by = 20000)),
+                     labels = c(seq(from = 110000, to = 210000, by = 20000))/1000) +
+  labs(x = expression(B[trigger]~"[1000t]"),
+       y = expression(F[trgt]))
