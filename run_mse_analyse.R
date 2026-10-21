@@ -887,7 +887,10 @@ stats_optima <- stats_combined %>%
 stats_optima <- stats_optima %>%
   bind_rows(stats_optima %>%
               filter(type == "Shortcut MSE") %>%
-              mutate(type = "Full MSE"))
+              mutate(type = "Full MSE")) %>%
+  bind_rows(stats_optima %>%
+              filter(type == "Full MSE") %>%
+              mutate(type = "Shortcut MSE"))
 
 p_cod <- stats_combined %>%
   ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
@@ -898,8 +901,9 @@ p_cod <- stats_combined %>%
                                   1), 
                        breaks = c(0.6, 0.7, 0.8, 0.9), na.value = "salmon") +
   geom_point(data = stats_optima,
-             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
-             shape = 3, stroke = 0.7, size = 5) +
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col,
+                 shape = type_col), 
+             stroke = 0.7, size = 5) +
   # geom_vline(data = stats_optima,
   #            aes(xintercept = Btrigger, colour = type_col),
   #            linewidth = 0.4, linetype = "1111") +
@@ -909,6 +913,9 @@ p_cod <- stats_combined %>%
   scale_colour_manual("Optimum",
                       values = c("Full MSE" = "black", 
                                  "Shortcut MSE" = "blue")) +
+  scale_shape_manual("Optimum",
+                      values = c("Full MSE" = 3, 
+                                 "Shortcut MSE" = 4)) +
   labs(y = expression(F[target]), 
        x = expression(B[trigger]~"(1000t)")) +
   facet_grid(stock ~ type) + 
@@ -964,7 +971,10 @@ stats_optima_saithe <- stats_combined_saithe %>%
 stats_optima_saithe <- stats_optima_saithe %>%
   bind_rows(stats_optima_saithe %>%
               filter(type == "Shortcut MSE") %>%
-              mutate(type = "Full MSE"))
+              mutate(type = "Full MSE")) %>%
+  bind_rows(stats_optima_saithe %>%
+              filter(type == "Full MSE") %>%
+              mutate(type = "Shortcut MSE"))
 
 p_saithe <- stats_combined_saithe %>%
   ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
@@ -975,11 +985,15 @@ p_saithe <- stats_combined_saithe %>%
                                   1), 
                        breaks = c(0.9, 0.95), na.value = "salmon") +
   geom_point(data = stats_optima_saithe,
-             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
-             shape = 3, stroke = 0.7, size = 5) +
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col, 
+                 shape = type_col), 
+             stroke = 0.7, size = 5) +
   scale_colour_manual("Optimum",
                       values = c("Full MSE" = "black", 
                                  "Shortcut MSE" = "blue")) +
+  scale_shape_manual("Optimum",
+                     values = c("Full MSE" = 3, 
+                                "Shortcut MSE" = 4)) +
   labs(y = expression(F[target]), 
        x = expression(B[trigger]~"(1000t)")) +
   facet_grid(stock ~ type) + 
@@ -1027,7 +1041,10 @@ stats_optima_whiting <- stats_combined_whiting %>%
 stats_optima_whiting <- stats_optima_whiting %>%
   bind_rows(stats_optima_whiting %>%
               filter(type == "Shortcut MSE") %>%
-              mutate(type = "Full MSE"))
+              mutate(type = "Full MSE")) %>%
+  bind_rows(stats_optima_whiting %>%
+              filter(type == "Full MSE") %>%
+              mutate(type = "Shortcut MSE"))
 
 p_whiting <- stats_combined_whiting %>%
   ggplot(aes(x = Btrigger/1000, y = Ftrgt, fill = catch_col)) +
@@ -1038,11 +1055,15 @@ p_whiting <- stats_combined_whiting %>%
                                   1), 
                        breaks = seq(0.5, 1, 0.1), na.value = "salmon") +
   geom_point(data = stats_optima_whiting,
-             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col), 
-             shape = 3, stroke = 0.7, size = 5) +
+             aes(x = Btrigger/1000, y = Ftrgt, colour = type_col,
+                 shape = type_col), 
+             stroke = 0.7, size = 5) +
   scale_colour_manual("Optimum",
                       values = c("Full MSE" = "black", 
                                  "Shortcut MSE" = "blue")) +
+  scale_shape_manual("Optimum",
+                     values = c("Full MSE" = 3, 
+                                "Shortcut MSE" = 4)) +
   labs(y = expression(F[target]), 
        x = expression(B[trigger]~"(1000t)")) +
   facet_grid(stock ~ type) + 
@@ -1242,3 +1263,78 @@ ggsave(filename = "output/plots/shortcut/Figure_herring_full_vs_shortcut_grid.pd
        width = 17, height = 6, units = "cm")
 
 # tmp <- read.csv("output/herring/compare_shortcut_sam_contours.csv")
+
+### for 3 OMs
+
+stats_herring <- read.csv("output/herring/compare_shortcut_sam_summary_fullgrid_by_om_4OMs.csv")
+unique(stats_herring$om)
+
+stats_herring_combined <- stats_herring %>% 
+  filter(om %in% c("base", "M2", "M3")) %>%
+  select(OM = om,
+         Ftrgt = Ftarget, Btrigger, 
+         risk_full = risk3_long_sam, 
+         risk_shortcut = risk3_long_shortcut,
+         catch_shortcut = C_long_shortcut, 
+         catch_full = C_long_sam,
+         samcomputed = observed_sam) %>%
+  pivot_longer(cols = c(-1, -2, -3, -8),
+               names_to = c(".value", "type"),
+               names_sep = "_") %>%
+  filter(!is.na(risk) & !is.na(catch)) %>%
+  group_by(OM, type) %>%
+  mutate(catch_col = catch) %>%
+  mutate(catch_col = ifelse(risk <= 0.05, catch, NA)) %>%
+  mutate(catch_col = catch_col/max(catch_col, na.rm = TRUE)) %>%
+  mutate(type = factor(type, levels = c("full", "shortcut"),
+                       labels = c("Full MSE", "Shortcut MSE"))) %>%
+  mutate(OM = factor(OM, levels = c("base", "M2", "M3"),
+                     labels = c("Baseline", "M2", "M3")))
+### catch optimum
+stats_optima_herring <- stats_herring_combined %>%
+  filter(risk <= 0.05) %>%
+  filter(catch_col == max(catch_col)) %>%
+  mutate(type_col = type)
+### duplicate shortcut optimum to include in full MSE plot
+stats_optima_herring <- stats_optima_herring %>%
+  bind_rows(stats_optima_herring %>%
+              filter(type == "Shortcut MSE") %>%
+              mutate(type = "Full MSE")) %>%
+  bind_rows(stats_optima_herring %>%
+              filter(type == "Full MSE") %>%
+              mutate(type = "Shortcut MSE"))
+
+p_herring <- stats_herring_combined %>%
+  ggplot(aes(x = Btrigger/1e+6, y = Ftrgt, fill = catch_col)) +
+  geom_tile(alpha = 0.8) +
+  scale_fill_gradientn(paste0("Relative catch"),
+                       colours = hcl.colors(10),
+                       values = c(0, 0.4, 0.6, 0.8, 0.85, 0.9, 0.95, 1), 
+                       breaks = c(0.9, 0.95, 1), 
+                       na.value = "salmon",
+                       guide = guide_colorbar(barheight = unit(3, "lines"))) +
+  geom_point(data = stats_optima_herring,
+             aes(x = Btrigger/1e+6, y = Ftrgt, colour = type_col,
+                 shape = type_col), stroke = 0.7, size = 5) +
+  scale_colour_manual("Optimum",
+                      values = c("Full MSE" = "black", 
+                                 "Shortcut MSE" = "blue")) +
+  scale_shape_manual("Optimum",
+                      values = c("Full MSE" = 3, 
+                                 "Shortcut MSE" = 4)) +
+  labs(y = expression(F[target]), 
+       x = expression(B[trigger]~"(million t)")) +
+  facet_grid(OM ~ type) + 
+  scale_x_continuous(breaks = seq(0.8, 1.6, by = 0.2)) +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(strip.text = element_text(size = 8),
+        strip.text.y = element_text(angle = 90),
+        #strip.text.x.top = element_blank(),
+        #axis.title.x = element_blank(),
+  )
+p_herring
+ggsave(filename = "output/plots/shortcut/Figure_herring_full_vs_shortcut_grid3.png", 
+       width = 17, height = 12, units = "cm", dpi = 600)
+ggsave(filename = "output/plots/shortcut/Figure_herring_full_vs_shortcut_grid3.pdf", 
+       width = 17, height = 12, units = "cm")
